@@ -313,6 +313,8 @@ assets/gen_typing_gif.py
 /docs/scripts/**/*.pyc
 !/docs/hub/
 /docs/hub/registry-dates.json
+!/docs/cli-matrix/
+!/docs/cli-matrix/**
 !/notebooklm/
 /notebooklm/*
 /notebooklm/.*

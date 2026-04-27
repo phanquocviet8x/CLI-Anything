@@ -43,6 +43,14 @@ Purpose: validate that the S1 capability matrix supports realistic, end-to-end a
 - [ ] Every provider choice is recorded in `plan.json` with reason
 - [ ] Agent either used or *explicitly suggested* a paid provider when quality mattered; no silent skips
 
+**Reviewed Evidence**
+- [x] Reviewed landscape master: [`landscape_modern_v3_1_shotcut.mp4`](/root/cli-matrix-tests/video-creation-plan1/modern/output/landscape_modern_v3_1_shotcut.mp4)
+- [x] Reviewed alternate NLE export: [`landscape_modern_v3_1_kdenlive.mp4`](/root/cli-matrix-tests/video-creation-plan1/modern/output/landscape_modern_v3_1_kdenlive.mp4)
+- [x] Reviewed thumbnail: [`thumb_modern_v3_1.png`](/root/cli-matrix-tests/video-creation-plan1/modern/output/thumb_modern_v3_1.png)
+- [x] Artifact lineage and rebuild notes: [`modern/AGENTS.md`](/root/cli-matrix-tests/video-creation-plan1/modern/AGENTS.md), [`modern/PROCEDURE.md`](/root/cli-matrix-tests/video-creation-plan1/modern/PROCEDURE.md)
+- [x] Separate CLI harness usage note: [`CLI_ANYTHING_USAGE_ACTUAL.md`](/root/cli-matrix-tests/video-creation-plan1/modern/CLI_ANYTHING_USAGE_ACTUAL.md)
+- [x] Additional matrix showcase for multi-video hype montage: [`landscape_hype_mix_v1_shotcut.mp4`](/root/cli-matrix-tests/video-creation-plan1/modern/output/landscape_hype_mix_v1_shotcut.mp4), [`HYPE_MIX_V1.md`](/root/cli-matrix-tests/video-creation-plan1/modern/HYPE_MIX_V1.md)
+
 ---
 
 ## Task 2 — Multilingual developer tutorial (EN → ES/JA/ZH)
@@ -152,6 +160,15 @@ Purpose: validate that the S1 capability matrix supports realistic, end-to-end a
 - [ ] Cuts land within ±1 frame of detected beats (check via `ffprobe` packet timestamps vs `beats.json`)
 - [ ] Lyrics appear on the right word at the right time (sample 5 random lines)
 - [ ] No audio desync at end (lengths match within 50ms)
+
+**Reviewed Evidence**
+- [x] Fresh-resource Task 5 rerun reviewed final video: [`landscape_pulse_of_motion_v1_shotcut.mp4`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/output/landscape_pulse_of_motion_v1_shotcut.mp4)
+- [x] Reviewed fresh-resource thumbnail: [`thumb_pulse_of_motion_v1.png`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/output/thumb_pulse_of_motion_v1.png)
+- [x] Reviewed fresh-resource Shotcut project and no-subs master: [`landscape_pulse_of_motion_v1_shotcut.mlt`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/build/shotcut/landscape_pulse_of_motion_v1_shotcut.mlt), [`landscape_pulse_of_motion_v1_shotcut_nosubs.mp4`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/build/shotcut/landscape_pulse_of_motion_v1_shotcut_nosubs.mp4)
+- [x] Reviewed fresh-resource beat map and lyric assets: [`beats.json`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/build/beats.json), [`lyrics.ass`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/build/lyrics.ass), [`lyrics.txt`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/build/lyrics.txt)
+- [x] Reviewed lyric-window frames after final burn: [`11s_lyric_fix.png`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/review_frames/11s_lyric_fix.png), [`35s_lyric_fix.png`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/review_frames/35s_lyric_fix.png), [`55s_lyric_fix.png`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/review_frames/55s_lyric_fix.png), [`75s_lyric_fix.png`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/review_frames/75s_lyric_fix.png)
+- [x] Fresh-resource build note and local bug tracking: [`PULSE_OF_MOTION_V1.md`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/PULSE_OF_MOTION_V1.md), [`CLI_bug_track_task5.md`](/root/cli-matrix-tests/video-creation-plan1/task5_pulse_of_motion/CLI_bug_track_task5.md)
+- [x] Prior LaunchOS-based Task 5 attempt is superseded by this fresh-resource rerun: [`landscape_beat_sync_ai_v1_shotcut.mp4`](/root/cli-matrix-tests/video-creation-plan1/modern/output/landscape_beat_sync_ai_v1_shotcut.mp4)
 
 ---
 

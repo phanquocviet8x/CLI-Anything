@@ -218,6 +218,8 @@ Recipes declare *which capabilities a workflow needs* — not the order. Apply t
 
 - **Run the preflight block once**, then consult the cached result when picking providers.
 - **Search for skills per capability** before starting: `npx skills search "<capability hints>"` (hints are in `matrix_registry.json`).
+- **For motion-heavy explainer polish, install the Remotion skill inside the workspace:** `npx skills add remotion-dev/skills -a codex -y`. In the reviewed CLI-matrix video scenario, the installed `remotion-best-practices` skill materially improved typography, transition structure, and overflow-safe scene design for reusable title/reveal/diff/end clips.
+- **For multi-video beat-cut montage work, a strong local recipe is:** extract short source clips into one workspace folder with `ffmpeg`, use the installed Remotion skill to build the typography-heavy motion stings / grid segments, then hand final timeline assembly and grade / envelope filters to `cli-anything-shotcut`. This combination worked well in the reviewed `modern/hype_mix_v1` showcase.
 - **Prefer `--json`** for harness CLI output when chaining tools.
 - **Escalate explicitly.** When a paid API would materially improve quality, use the suggest-to-user template. Do not silently burn credits.
 - **Recipes ≠ order.** A recipe says what's needed; pick a sensible order for the specific task. Most videos should transcribe *after* the final cut, not before; screencasts often capture audio + video simultaneously.

@@ -10,10 +10,14 @@ Covers:
                                           remove_unreferenced_vertices, fix_normals)
 - cli_anything.threemf.core.modifier     (resize_holes, resize_single_hole)
 
-All tests use synthetic numpy data -- no real .3mf files are required.
+Tests use synthetic numpy data and generated in-memory 3MF fixtures -- no
+external 3MF files are required.
 """
 
 from __future__ import annotations
+
+import zipfile
+from xml.etree import ElementTree as ET
 
 import numpy as np
 import pytest
@@ -21,6 +25,7 @@ import pytest
 from cli_anything.threemf.core.parser import MeshData, ThreeMFData
 from cli_anything.threemf.utils import threemf_backend as backend
 from cli_anything.threemf.core import inspector, repair, modifier
+from cli_anything.threemf.core import parser as parser_mod
 from cli_anything.threemf.core.inspector import DetectedHole, InspectParams
 from cli_anything.threemf.core.modifier import resize_holes, resize_single_hole
 
@@ -74,6 +79,57 @@ def _make_threemf_data(mesh: MeshData | None = None) -> ThreeMFData:
         raw_entries={},
         source_path="",
     )
+
+
+def _write_triangle_attr_3mf(path, triangles_xml: str | None = None) -> None:
+    if triangles_xml is None:
+        triangles_xml = """
+          <triangle v1="0" v2="1" v3="2" pid="7" p1="1" p2="2" p3="3" custom="kept"/>
+          <triangle v1="0" v2="2" v3="3" pid="8" p1="4" p2="5" p3="6" vendor:tag="alpha"/>
+        """
+    model_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter"
+       xmlns="{parser_mod.NS_CORE}"
+       xmlns:vendor="urn:vendor:test">
+  <resources>
+    <object id="1" name="attr-mesh" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="1" y="0" z="0"/>
+          <vertex x="0" y="1" z="0"/>
+          <vertex x="-1" y="0" z="0"/>
+          <vertex x="0" y="-1" z="0"/>
+        </vertices>
+        <triangles>
+{triangles_xml}
+        </triangles>
+      </mesh>
+    </object>
+    <object id="component-only" type="model">
+      <components>
+        <component objectid="1" transform="1 0 0 0 1 0 0 0 1 10 20 30"/>
+      </components>
+    </object>
+  </resources>
+  <build>
+    <item objectid="component-only" transform="1 0 0 0 1 0 0 0 1 5 0 0"/>
+  </build>
+</model>
+"""
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", b"fixture")
+        zf.writestr("3D/3dmodel.model", model_xml.encode("utf-8"))
+
+
+def _model_root(path) -> ET.Element:
+    with zipfile.ZipFile(path, "r") as zf:
+        return ET.fromstring(zf.read("3D/3dmodel.model"))
+
+
+def _triangle_attrs(path) -> list[dict[str, str]]:
+    root = _model_root(path)
+    triangles = root.findall(f".//{{{parser_mod.NS_CORE}}}triangle")
+    return [dict(triangle.attrib) for triangle in triangles]
 
 
 def _make_circle_points(
@@ -147,6 +203,19 @@ class TestParser:
     def test_mesh_data_triangle_dtype(self) -> None:
         """Triangles array dtype is int32."""
         assert _make_cube_mesh().triangles.dtype == np.int32
+
+    def test_mesh_data_triangle_attributes_length_must_match_faces(self) -> None:
+        """Per-triangle XML metadata must stay aligned with face rows."""
+        v = np.zeros((3, 3), dtype=np.float64)
+        t = np.array([[0, 1, 2]], dtype=np.int32)
+        with pytest.raises(ValueError, match="triangle_attributes"):
+            MeshData(
+                object_id="1",
+                name="x",
+                vertices=v,
+                triangles=t,
+                triangle_attributes=({"pid": "1"}, {"pid": "2"}),
+            )
 
     def test_mesh_data_is_frozen_on_object_id(self) -> None:
         """MeshData raises FrozenInstanceError when object_id is reassigned."""
@@ -260,6 +329,95 @@ class TestParser:
             source_path="",
         )
         assert data.raw_entries["thumbnail.png"] == payload
+
+    def test_parse_resize_write_preserves_triangle_attributes_and_component_transforms(self, tmp_path) -> None:
+        """A 3MF fixture keeps triangle material/vendor attrs after vertex edits and write."""
+        source = tmp_path / "attrs.3mf"
+        output = tmp_path / "resized.3mf"
+        _write_triangle_attr_3mf(source)
+
+        data = parser_mod.parse_3mf(str(source))
+        mesh = data.meshes[0]
+        assert mesh.triangle_attributes[0] == {
+            "pid": "7",
+            "p1": "1",
+            "p2": "2",
+            "p3": "3",
+            "custom": "kept",
+        }
+
+        hole = DetectedHole(
+            hole_id=0,
+            center=(0.0, 0.0),
+            diameter=2.0,
+            axis_min=-0.1,
+            axis_max=0.1,
+            axis=2,
+            confidence=1.0,
+            vertex_count=4,
+        )
+        resized_mesh, report = resize_single_hole(mesh, hole, target_diameter=4.0)
+        assert report["vertices_moved"] == 4
+        new_data = ThreeMFData(
+            meshes=(resized_mesh,),
+            unit=data.unit,
+            model_path=data.model_path,
+            metadata=data.metadata,
+            raw_entries=data.raw_entries,
+            source_path=data.source_path,
+        )
+
+        parser_mod.write_3mf(new_data, str(output))
+
+        attrs = _triangle_attrs(output)
+        assert attrs[0]["pid"] == "7"
+        assert attrs[0]["p1"] == "1"
+        assert attrs[0]["p2"] == "2"
+        assert attrs[0]["p3"] == "3"
+        assert attrs[0]["custom"] == "kept"
+        vendor_key = "{urn:vendor:test}tag"
+        assert attrs[1][vendor_key] == "alpha"
+
+        root = _model_root(output)
+        component = root.find(f".//{{{parser_mod.NS_CORE}}}component")
+        build_item = root.find(f".//{{{parser_mod.NS_CORE}}}item")
+        assert component is not None
+        assert build_item is not None
+        assert component.get("transform") == "1 0 0 0 1 0 0 0 1 10 20 30"
+        assert build_item.get("transform") == "1 0 0 0 1 0 0 0 1 5 0 0"
+
+    def test_repair_write_preserves_attributes_for_surviving_triangles(self, tmp_path) -> None:
+        """Repair drops metadata only for faces removed from the mesh."""
+        source = tmp_path / "degenerate.3mf"
+        output = tmp_path / "repaired.3mf"
+        triangles_xml = """
+          <triangle v1="0" v2="1" v3="2" pid="10" p1="11" p2="12" p3="13"/>
+          <triangle v1="0" v2="0" v3="1" pid="99" p1="99" p2="99" p3="99" removed="true"/>
+          <triangle v1="3" v2="1" v3="2" pid="20" p1="21" p2="22" p3="23" custom="survives"/>
+        """
+        _write_triangle_attr_3mf(source, triangles_xml=triangles_xml)
+
+        data = parser_mod.parse_3mf(str(source))
+        repaired, report = repair.repair_mesh(data.meshes[0])
+        assert report["degenerate_faces_removed"] == 1
+        assert [attrs["pid"] for attrs in repaired.triangle_attributes] == ["10", "20"]
+
+        parser_mod.write_3mf(
+            ThreeMFData(
+                meshes=(repaired,),
+                unit=data.unit,
+                model_path=data.model_path,
+                metadata=data.metadata,
+                raw_entries=data.raw_entries,
+                source_path=data.source_path,
+            ),
+            str(output),
+        )
+
+        attrs = _triangle_attrs(output)
+        assert [item["pid"] for item in attrs] == ["10", "20"]
+        assert attrs[1]["custom"] == "survives"
+        assert all(item.get("removed") is None for item in attrs)
 
 
 # ===========================================================================

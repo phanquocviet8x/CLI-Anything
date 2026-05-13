@@ -43,7 +43,13 @@ def repair_mesh(mesh_data: MeshData) -> tuple[MeshData, dict]:
     )
 
     # Step 3 -- remove degenerate faces
-    triangles, degen_count = remove_degenerate_faces(triangles)
+    valid_faces = _nondegenerate_face_mask(triangles)
+    degen_count = int(triangles.shape[0] - np.count_nonzero(valid_faces))
+    triangles = triangles[valid_faces]
+    triangle_attributes = _filter_triangle_attributes(
+        mesh_data.triangle_attributes,
+        valid_faces,
+    )
 
     # Step 4 -- remove unreferenced vertices
     vertices, triangles, unref_count = remove_unreferenced_vertices(
@@ -58,7 +64,12 @@ def repair_mesh(mesh_data: MeshData) -> tuple[MeshData, dict]:
         "final_triangle_count": int(triangles.shape[0]),
     }
 
-    repaired = replace(mesh_data, vertices=vertices, triangles=triangles)
+    repaired = replace(
+        mesh_data,
+        vertices=vertices,
+        triangles=triangles,
+        triangle_attributes=triangle_attributes,
+    )
     return repaired, report
 
 
@@ -115,9 +126,7 @@ def remove_degenerate_faces(
     if triangles.shape[0] == 0:
         return triangles, 0
 
-    v0, v1, v2 = triangles[:, 0], triangles[:, 1], triangles[:, 2]
-    valid = (v0 != v1) & (v1 != v2) & (v0 != v2)
-
+    valid = _nondegenerate_face_mask(triangles)
     filtered = triangles[valid]
     removed = int(triangles.shape[0] - filtered.shape[0])
     return filtered, removed
@@ -183,10 +192,18 @@ def fix_normals(mesh_data: MeshData) -> MeshData:
     )
     trimesh.repair.fix_normals(tm)
 
+    fixed_triangles = np.array(tm.faces)
+    triangle_attributes = (
+        mesh_data.triangle_attributes
+        if len(mesh_data.triangle_attributes) == fixed_triangles.shape[0]
+        else ()
+    )
+
     return replace(
         mesh_data,
         vertices=np.array(tm.vertices),
-        triangles=np.array(tm.faces),
+        triangles=fixed_triangles,
+        triangle_attributes=triangle_attributes,
     )
 
 
@@ -208,6 +225,26 @@ def _validate_mesh(mesh_data: MeshData) -> None:
     if mesh_data.triangles.ndim != 2 or mesh_data.triangles.shape[1] != 3:
         if mesh_data.triangles.shape[0] != 0:
             raise ValueError("mesh_data.triangles must have shape (M, 3)")
+
+
+def _nondegenerate_face_mask(triangles: np.ndarray) -> np.ndarray:
+    if triangles.shape[0] == 0:
+        return np.zeros((0,), dtype=bool)
+    v0, v1, v2 = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    return (v0 != v1) & (v1 != v2) & (v0 != v2)
+
+
+def _filter_triangle_attributes(
+    triangle_attributes: tuple[dict[str, str], ...],
+    mask: np.ndarray,
+) -> tuple[dict[str, str], ...]:
+    if not triangle_attributes:
+        return ()
+    return tuple(
+        dict(attrs)
+        for attrs, keep in zip(triangle_attributes, mask)
+        if bool(keep)
+    )
 
 
 def _empty_report() -> dict:

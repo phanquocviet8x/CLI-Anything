@@ -59,4 +59,13 @@ The tool preserves all non-mesh content during repack:
 - BambuStudio: project_settings.config, model_settings.config, plate thumbnails
 - PrusaSlicer: slic3r_pe configs, layer height profiles
 
+Mesh triangle attributes are also preserved when the corresponding triangle is
+kept. This includes material/property attributes such as `pid`, `p1`, `p2`, and
+`p3`, plus unknown vendor attributes on `<triangle>` elements.
+
+Component-only objects and build/component `transform` attributes are preserved
+as untouched XML when writing files loaded from an existing 3MF archive. The
+current geometry operations do not resolve component transforms into mesh
+coordinates and cannot edit component-instance transforms directly.
+
 Output files can be reopened in the original slicer without configuration loss.

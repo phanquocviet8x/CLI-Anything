@@ -55,12 +55,17 @@ class MeshData:
         name:      The ``name`` attribute (may be empty).
         vertices:  (N, 3) float64 array of vertex coordinates.
         triangles: (M, 3) int32 array of triangle vertex-indices.
+        triangle_attributes: Per-triangle XML attributes other than
+                    ``v1``, ``v2``, and ``v3``. This preserves 3MF
+                    material/property attributes such as ``pid``, ``p1``,
+                    ``p2``, and ``p3`` during mesh edits.
     """
 
     object_id: str
     name: str
     vertices: np.ndarray  # (N, 3) float64
     triangles: np.ndarray  # (M, 3) int32
+    triangle_attributes: tuple[dict[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         # Validate shapes -- run only once at construction time.
@@ -71,6 +76,14 @@ class MeshData:
         if self.triangles.ndim != 2 or self.triangles.shape[1] != 3:
             raise ValueError(
                 f"triangles must be (M, 3); got {self.triangles.shape}"
+            )
+        if self.triangle_attributes and (
+            len(self.triangle_attributes) != self.triangles.shape[0]
+        ):
+            raise ValueError(
+                "triangle_attributes length must match triangle count; "
+                f"got {len(self.triangle_attributes)} attributes for "
+                f"{self.triangles.shape[0]} triangles"
             )
 
 
@@ -158,11 +171,19 @@ def _parse_mesh_element(
         return None
 
     tri_list: list[tuple[int, int, int]] = []
+    triangle_attributes: list[dict[str, str]] = []
     for t in tris_elem.iterfind(_tag("triangle", ns)):
         v1 = int(t.get("v1", "0"))
         v2 = int(t.get("v2", "0"))
         v3 = int(t.get("v3", "0"))
         tri_list.append((v1, v2, v3))
+        triangle_attributes.append(
+            {
+                key: value
+                for key, value in t.attrib.items()
+                if key not in {"v1", "v2", "v3"}
+            }
+        )
 
     if not tri_list:
         return None
@@ -174,6 +195,7 @@ def _parse_mesh_element(
         name=name,
         vertices=vertices,
         triangles=triangles,
+        triangle_attributes=tuple(triangle_attributes),
     )
 
 
@@ -355,13 +377,23 @@ def _build_mesh_element(md: MeshData, ns: str) -> ET.Element:
 
     # Triangles
     tris_el = ET.SubElement(mesh_el, _tag("triangles", ns))
-    for row in md.triangles:
+    for index, row in enumerate(md.triangles):
+        attrs = (
+            dict(md.triangle_attributes[index])
+            if md.triangle_attributes
+            else {}
+        )
+        attrs.update(
+            {
+                "v1": str(row[0]),
+                "v2": str(row[1]),
+                "v3": str(row[2]),
+            }
+        )
         ET.SubElement(
             tris_el,
             _tag("triangle", ns),
-            v1=str(row[0]),
-            v2=str(row[1]),
-            v3=str(row[2]),
+            attrs,
         )
 
     return mesh_el

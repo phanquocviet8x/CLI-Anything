@@ -68,6 +68,11 @@ All non-mesh content (slicer settings, thumbnails, plate configurations) is
 preserved during file repack. Output files can be reopened in BambuStudio or
 PrusaSlicer without configuration loss.
 
+Triangle-level mesh attributes are preserved for triangles that survive an edit,
+including `pid`, `p1`, `p2`, `p3`, and unknown vendor attributes. Component-only
+objects and component/build `transform` attributes are kept as original XML, but
+this CLI does not currently apply or edit component-instance transforms.
+
 ## Architecture
 
 ```

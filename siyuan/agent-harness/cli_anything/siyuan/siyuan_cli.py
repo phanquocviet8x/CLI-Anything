@@ -285,7 +285,10 @@ def _handle_repl_command(skin: Any, cmd: str) -> None:
             skin.error("Usage: block <insert|prepend|append|update|delete|get|child>")
             return
         sub = parts[1]
-        if sub == "insert" and len(parts) >= 4:
+        if sub == "insert":
+            if len(parts) < 4:
+                skin.error("Usage: block insert <parent_id> <data>")
+                return
             result = client.insert_block("markdown", parts[3], parent_id=parts[2])
             if json_mode:
                 click.echo(json.dumps(result, ensure_ascii=False))
@@ -522,13 +525,14 @@ def block():
 @click.argument("data")
 @click.option("--previous", default="", help="Previous block ID")
 @click.option("--parent", default="", help="Parent block ID")
+@click.option("--next", "next_", default="", help="Next block ID")
 @click.option("--data-type", default="markdown", help="Data type (markdown/dom)")
 @click.pass_obj
-def block_insert(ctx: SiYuanContext, data: str, previous: str, parent: str, data_type: str):
+def block_insert(ctx: SiYuanContext, data: str, previous: str, parent: str, next_: str, data_type: str):
     """Insert a block."""
-    if not parent and not previous:
-        raise click.UsageError("Either --parent or --previous is required for block insert")
-    result = ctx.client.insert_block(data_type, data, parent_id=parent, previous_id=previous)
+    if not parent and not previous and not next_:
+        raise click.UsageError("An anchor is required: --parent, --previous, or --next")
+    result = ctx.client.insert_block(data_type, data, parent_id=parent, previous_id=previous, next_id=next_)
     if ctx.json_output:
         click.echo(json.dumps(result, ensure_ascii=False))
     else:

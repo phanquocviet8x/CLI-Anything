@@ -252,6 +252,62 @@ class TestStatusCommand:
             assert "Connected" in result.output or "connected" in result.output.lower()
 
 
+# ── Block insert command ────────────────────────────────────────────────
+
+
+class TestBlockInsertCommand:
+    def test_block_insert_with_parent(self, runner, mock_ctx):
+        """block insert with --parent succeeds."""
+        mock_ctx.client.insert_block.return_value = [{"id": "new-block"}]
+        with patch("cli_anything.siyuan.siyuan_cli.SiYuanContext", return_value=mock_ctx):
+            result = runner.invoke(cli, ["block", "insert", "hello", "--parent", "pid"])
+            assert result.exit_code == 0
+            assert "Block inserted" in result.output
+            mock_ctx.client.insert_block.assert_called_once_with(
+                "markdown", "hello", parent_id="pid", previous_id="", next_id=""
+            )
+
+    def test_block_insert_with_previous(self, runner, mock_ctx):
+        """block insert with --previous succeeds."""
+        mock_ctx.client.insert_block.return_value = [{"id": "new-block"}]
+        with patch("cli_anything.siyuan.siyuan_cli.SiYuanContext", return_value=mock_ctx):
+            result = runner.invoke(cli, ["block", "insert", "hello", "--previous", "prev"])
+            assert result.exit_code == 0
+            assert "Block inserted" in result.output
+            mock_ctx.client.insert_block.assert_called_once_with(
+                "markdown", "hello", parent_id="", previous_id="prev", next_id=""
+            )
+
+    def test_block_insert_with_next(self, runner, mock_ctx):
+        """block insert with --next succeeds."""
+        mock_ctx.client.insert_block.return_value = [{"id": "new-block"}]
+        with patch("cli_anything.siyuan.siyuan_cli.SiYuanContext", return_value=mock_ctx):
+            result = runner.invoke(cli, ["block", "insert", "hello", "--next", "nid"])
+            assert result.exit_code == 0
+            assert "Block inserted" in result.output
+            mock_ctx.client.insert_block.assert_called_once_with(
+                "markdown", "hello", parent_id="", previous_id="", next_id="nid"
+            )
+
+    def test_block_insert_without_anchor_errors(self, runner, mock_ctx):
+        """block insert without any anchor raises UsageError."""
+        mock_ctx.client.insert_block.return_value = [{"id": "new-block"}]
+        with patch("cli_anything.siyuan.siyuan_cli.SiYuanContext", return_value=mock_ctx):
+            result = runner.invoke(cli, ["block", "insert", "hello"])
+            assert result.exit_code == 2
+            assert "anchor" in result.output.lower() or "Error" in result.output
+
+    def test_block_insert_json_output(self, runner, mock_ctx):
+        """--json block insert returns raw data."""
+        mock_ctx.json_output = True
+        mock_ctx.client.insert_block.return_value = [{"id": "new-block"}]
+        with patch("cli_anything.siyuan.siyuan_cli.SiYuanContext", return_value=mock_ctx):
+            result = runner.invoke(cli, ["--json", "block", "insert", "hello", "--parent", "pid"])
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data[0]["id"] == "new-block"
+
+
 # ── Doc get command ────────────────────────────────────────────────────
 
 

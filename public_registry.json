@@ -362,6 +362,28 @@
           "url": "https://github.com/MartaKar"
         }
       ]
+    },
+    {
+      "name": "hermes-skill",
+      "display_name": "CLI-Anything Skill for Hermes Agent",
+      "version": "1.0.0",
+      "description": "CLI-Anything skill adapter for Hermes Agent — enables Hermes to build CLI harnesses for any GUI application using the 7-phase HARNESS.md methodology",
+      "category": "agent-tools",
+      "requires": "Hermes Agent with terminal and execute_code tools enabled",
+      "homepage": "https://github.com/HKUDS/CLI-Anything",
+      "source_url": "https://github.com/HKUDS/CLI-Anything",
+      "package_manager": "script",
+      "install_strategy": "bundled",
+      "install_notes": "Clone the CLI-Anything repository, then run `bash hermes-skill/scripts/install.sh` (macOS/Linux) or `.\\hermes-skill\\scripts\\install.ps1` (Windows) to install into ~/.hermes/skills/cli-anything-hermes.",
+      "uninstall_notes": "Remove ~/.hermes/skills/cli-anything-hermes (or %USERPROFILE%\\.hermes\\skills\\cli-anything-hermes on Windows).",
+      "skill_md": "hermes-skill/SKILL.md",
+      "entry_point": null,
+      "contributors": [
+        {
+          "name": "ligl0325",
+          "url": "https://github.com/ligl0325"
+        }
+      ]
     }
   ]
 }

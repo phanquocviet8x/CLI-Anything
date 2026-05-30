@@ -1,213 +1,128 @@
 ---
 name: cli-anything-hermes
-description: Hermes Agent skill for CLI-Anything — enables AI agents to build CLI harnesses for any GUI application. Based on HKUDS/CLI-Anything's HARNESS.md methodology.
-version: 1.0.0
-author: ligl0325 (based on HKUDS/CLI-Anything)
-license: Apache 2.0
-metadata:
-  hermes:
-    tags: [cli, harness, hermes, gui-to-cli, agent-tools]
-    homepage: https://github.com/HKUDS/CLI-Anything
+description: Use when the user wants Hermes Agent to build, refine, test, or validate a CLI-Anything harness for a GUI application or source repository. Adapts the CLI-Anything methodology to Hermes without changing the generated Python harness format.
 ---
 
 # CLI-Anything for Hermes Agent
 
-## Overview
+Use this skill when the user wants Hermes Agent to act like the `CLI-Anything` builder.
 
-This skill enables [Hermes Agent](https://github.com/NousResearch/hermes-agent) to use CLI-Anything's methodology for building CLI tools for GUI applications. Hermes is a personal AI agent platform with multi-platform messaging gateway (Telegram, WeChat, Discord, etc.) and a powerful tool system.
+If this skill is being used from inside the `CLI-Anything` repository, read `../cli-anything-plugin/HARNESS.md` before implementation. That file is the full methodology source of truth. If it is not available, follow the condensed rules below.
 
-## How It Works in Hermes
+## Inputs
 
-Hermes agents can execute CLI commands via the built-in `terminal` tool, generate code via `execute_code`, and delegate complex tasks via `delegate_task`. This skill provides the SOP for combining these tools to generate and use CLI harnesses for any target software.
+Accept either:
 
-### Available Hermes Tools for Harness Building
+- A local source path such as `./gimp` or `/path/to/software`
+- A GitHub repository URL
 
-| Tool | Purpose in Harness Workflow |
-|------|---------------------------|
-| `terminal()` | Run shell commands, execute CLI tools, install packages, run tests |
-| `execute_code()` | Generate Python code (Click CLI, backend modules, tests) and write files |
-| `delegate_task()` | Parallelize analysis and code generation tasks |
-| `read_file()` / `write_file()` | Read and write harness files |
-| `patch()` | Make targeted edits to generated code |
+Derive the software name from the local directory name after cloning if needed.
 
-## General SOP: Building a CLI Harness (7 Phases)
+## Hermes Tool Bindings
 
-### Phase 1: Codebase Analysis
+Hermes agents build harnesses by combining these built-in tools:
 
-```python
-# In Hermes, use terminal and execute_code to analyze the target software
-from hermes_tools import terminal
+| Tool | Role in Harness Workflow |
+|------|--------------------------|
+| `terminal` | Run shell commands, install packages, execute CLI tools, run tests |
+| `execute_code` | Generate and write Python files (Click CLI, backend modules, tests) |
+| `delegate_task` | Parallelize analysis or generation subtasks |
+| `read_file` / `write_file` | Read and write harness source files |
+| `patch` | Make targeted edits to generated code |
 
-# 1. Check if software is installed
-result = terminal("which <software> 2>/dev/null || echo 'NOT_FOUND'")
+Consult the [Hermes Agent documentation](https://github.com/NousResearch/hermes-agent) for the exact tool invocation syntax.
 
-# 2. If open source, clone and analyze
-terminal("git clone --depth 1 <repo_url> /tmp/<software>-src")
-terminal("ls /tmp/<software>-src/")
+## Modes
 
-# 3. Identify the backend engine
-# GUI apps typically separate UI from logic — find the core library
-# Examples: GIMP → libgimp/pygimp, Blender → bpy, LibreOffice → UNO API
+### Build
+
+Use when the user wants a new harness.
+
+Produce this structure:
+
+```text
+<software>/
+└── agent-harness/
+    ├── <SOFTWARE>.md
+    ├── setup.py
+    └── cli_anything/
+        └── <software>/
+            ├── README.md
+            ├── __init__.py
+            ├── __main__.py
+            ├── <software>_cli.py
+            ├── core/
+            ├── utils/
+            └── tests/
 ```
 
-### Phase 2: CLI Architecture Design
+Implement a stateful Click CLI with:
 
-Design the command structure based on the software's capabilities:
+- one-shot subcommands
+- REPL mode as the default when no subcommand is given
+- `--json` machine-readable output
+- session state with undo/redo where the target software supports it
 
-```
-cli-anything-<software>
-├── project    — Project management (new, open, save, close)
-├── <core>     — Core operations (the app's main purpose)
-├── io         — Import/Export (file I/O, format conversion)
-├── config     — Configuration (settings, preferences)
-└── session    — State management (status, undo, redo, history)
-```
+### Refine
 
-Key design decisions:
-- **Both REPL and subcommand modes** (recommended)
-- **JSON output** via `--json` flag for agent consumption
-- **Human-readable output** (tables, colors) for interactive use
+Use when the harness already exists.
 
-### Phase 3: Implementation
+First inventory current commands and tests, then do gap analysis against the target software. Prefer:
 
-Generate the CLI using Python Click library:
+- high-impact missing features
+- easy wrappers around existing backend APIs or CLIs
+- additions that compose well with existing commands
 
-```python
-from hermes_tools import write_file, terminal
+Do not remove existing commands unless the user explicitly asks for a breaking change.
 
-# Create the CLI structure
-terminal("mkdir -p agent-harness/cli_anything/<software>/{utils,commands,tests}")
-terminal("touch agent-harness/cli_anything/<software>/__init__.py")
+### Test
 
-# Generate the main CLI file
-cli_code = '''
-import click
-...
+Plan tests before writing them. Keep both:
 
-@click.group(invoke_without_command=True)
-@click.option('--json', 'json_mode', is_flag=True, help='JSON output')
-@click.pass_context
-def cli(ctx, json_mode):
-    ctx.ensure_object(dict)
-    ctx.obj['json'] = json_mode
-    if ctx.invoked_subcommand is None:
-        ctx.invoke(repl)
+- `test_core.py` for unit coverage
+- `test_full_e2e.py` for workflow and backend validation
 
-...
-'''
+When possible, test the installed command via subprocess using `cli-anything-<software>` rather than only module imports.
 
-write_file("agent-harness/cli_anything/<software>/cli.py", cli_code)
-```
+### Validate
 
-Core modules required:
-- `cli.py` — Click CLI entry point with REPL support
-- `utils/<software>_backend.py` — Backend wrapper for the real software
-- `utils/state.py` — Session state management (project state, undo/redo)
-- `commands/project.py`, `commands/core.py` — Command groups
+Check that the harness:
 
-### Phase 4-5: Test Planning & Implementation
+- uses the `cli_anything.<software>` namespace package layout
+- has an installable `setup.py` entry point
+- supports JSON output
+- has a REPL default path
+- documents usage and tests
 
-```python
-# Create TEST.md plan
-test_plan = '''
-# Test Plan for cli-anything-<software>
+## Backend Rules
 
-## Unit Tests (test_core.py)
-- Project creation, opening, saving
-- Configuration management
-- State serialization
+Prefer the real software backend over reimplementation. Wrap the actual executable or scripting interface in `utils/<software>_backend.py` when possible. Use synthetic reimplementation only when the project explicitly requires it or no viable native backend exists.
 
-## E2E Tests (test_full_e2e.py)
-- Create project, export via real backend, verify output
-- Multi-step workflow simulation
-- Output format validation (magic bytes, structure)
-'''
+## Packaging Rules
 
-write_file("agent-harness/cli_anything/<software>/tests/TEST.md", test_plan)
+- Use `find_namespace_packages(include=["cli_anything.*"])`
+- Keep `cli_anything/` as a namespace package without a top-level `__init__.py`
+- Expose `cli-anything-<software>` through `console_scripts`
 
-# Run tests
-terminal("cd agent-harness && python3 -m pytest cli_anything/<software>/tests/ -v")
-```
+## Workflow
 
-### Phase 6-7: Installation & Publishing
-
-```bash
-# Install the CLI
-cd agent-harness && pip install -e .
-
-# Verify
-cli-anything-<software> --help
-cli-anything-<software> project new -o test_project.json
-cli-anything-<software> --json project list
-```
-
-## Example: Building a CLI for GIMP
-
-### Step 1: Analyze
-
-```python
-from hermes_tools import terminal
-terminal("which gimp")  # Check if installed
-terminal("gimp --version")
-# GIMP backend: pygimp / Script-Fu / ImageMagick for headless ops
-```
-
-### Step 2: Design
-
-```
-cli-anything-gimp
-├── project  — new, open, save, close, list
-├── image    — create, resize, crop, rotate, flip
-├── layer    — add, remove, duplicate, merge, reorder
-├── filter   — apply, blur, sharpen, color-adjust
-├── text     — add, edit, format
-├── export   — to-png, to-jpg, to-pdf, to-svg
-└── selection — select, invert, feather, grow, shrink
-```
-
-### Step 3: Implement Backend Wrapper
-
-GIMP's key power: headless batch processing via `gimp -i -b '(command)'` and ImageMagick for image ops.
-
-```python
-# utils/gimp_backend.py
-def gimp_batch(script):
-    return subprocess.run(
-        ["gimp", "-i", "-b", script, "-b", "(gimp-quit 0)"],
-        capture_output=True, text=True
-    )
-```
+1. Acquire the source tree locally (clone or use existing path).
+2. Analyze architecture, data model, existing CLIs, and GUI-to-API mappings.
+3. Design command groups and state model.
+4. Implement the harness.
+5. Write `TEST.md`, then tests, then run them.
+6. Update README usage docs.
+7. Verify local installation with `pip install -e .`
 
 ## Existing Harnesses (Reference)
 
-CLI-Anything community has built harnesses for 13+ applications. When building for a new app, check these for patterns:
+For an up-to-date list of supported harnesses and their backend patterns, see [`registry.json`](../registry.json) at the repository root.
 
-| Software | Backend Engine | Key Pattern |
-|----------|---------------|-------------|
-| Blender | bpy (Python API) | Rich Python API, headless rendering |
-| GIMP | pygimp + ImageMagick | Script-based batch processing |
-| LibreOffice | UNO API + headless CLI | `--headless --convert-to` |
-| Shotcut | MLT Framework + melt CLI | `melt` command-line renderer |
-| OBS Studio | obs-websocket | WebSocket API for remote control |
-| FFmpeg | Native CLI | Direct subprocess wrapper |
+## Output Expectations
 
-## Quick Start Template
+When reporting progress or final results, include:
 
-When a user says "make <software> controllable by AI", follow this checklist:
-
-```markdown
-- [ ] Phase 1: Analyze — `which <software>`, clone repo, find backend
-- [ ] Phase 2: Design — Define command groups and state model
-- [ ] Phase 3: Implement — Write Click CLI, backend wrapper, state management
-- [ ] Phase 4: Test Plan — Create TEST.md
-- [ ] Phase 5: Tests — Implement unit + E2E tests
-- [ ] Phase 6: Install — `pip install -e .`
-- [ ] Phase 7: Verify — Run `--help`, create project, export output
-```
-
-## Requirements
-
-- Python 3.10+
-- Click 8.0+
-- Target software installed locally (or accessible via network)
-- Hermes Agent with terminal and execute_code tools enabled
+- target software and source path
+- files added or changed
+- validation commands run
+- open risks or backend limitations

@@ -190,7 +190,7 @@ def test_grep_rooted_absolute_uses_three_separate_calls(mock_call):
     )
     assert mock_call.call_count == 3
     assert mock_call.call_args_list[0].args[0] == "cd %here%/main"
-    assert mock_call.call_args_list[1].args[0] == "grep Login"
+    assert mock_call.call_args_list[1].args[0] == "grep -r Login"
     assert mock_call.call_args_list[2].args[0] == "cd %here%"
 
 
@@ -614,13 +614,35 @@ def test_is_error_handles_missing_content():
 
 @patch.object(backend, "_call_execute", new_callable=AsyncMock)
 def test_grep_unrooted_produces_single_grep_call(mock_call):
-    """Unrooted grep dispatches one ``grep <pattern>`` call."""
+    """Unrooted grep dispatches one ``grep -r <pattern>`` call."""
     mock_call.return_value = {}
 
     backend.grep("Login")
 
     # session=None when no session is passed (default).
-    assert mock_call.call_args_list == [call("grep Login", False, session=None)]
+    assert mock_call.call_args_list == [call("grep -r Login", False, session=None)]
+
+
+@patch.object(backend, "_call_execute", new_callable=AsyncMock)
+def test_grep_unrooted_uses_recursive_flag(mock_call):
+    """Regression: pre-migration ``domshell_grep`` defaulted to
+    recursive=True; the unrooted branch must preserve that by passing
+    ``-r`` so nested matches aren't silently missed.
+    """
+    mock_call.return_value = _make_result("[lane: 1]")
+    backend.grep("Login")
+    assert mock_call.call_args.args[0] == "grep -r Login"
+
+
+@patch.object(backend, "_call_execute", new_callable=AsyncMock)
+def test_grep_rooted_uses_recursive_flag(mock_call):
+    """Regression: the rooted branch's middle call (the grep itself)
+    must also pass ``-r``. The 3-call sequence is cd / grep -r / cd-back.
+    """
+    mock_call.return_value = _make_result("[lane: 1]")
+    backend.grep("Login", path="main", session=_make_session())
+    # grep is the middle of the 3-call sequence.
+    assert mock_call.call_args_list[1].args[0] == "grep -r Login"
 
 
 @patch.object(backend, "_call_execute", new_callable=AsyncMock)
@@ -640,7 +662,7 @@ def test_grep_rooted_emits_three_call_sequence(mock_call):
 
     assert mock_call.call_args_list == [
         call("cd %here%/main", False, session=sess),
-        call("grep Login", False, session=sess),
+        call("grep -r Login", False, session=sess),
         call("cd %here%", False, session=sess),
     ]
 
@@ -659,7 +681,7 @@ def test_grep_rooted_quotes_path_with_spaces(mock_call):
     # Three-call sequence — quoting applies to the anchor (first call).
     assert mock_call.call_args_list == [
         call("cd '%here%/path with spaces'", False, session=sess),
-        call("grep Login", False, session=sess),
+        call("grep -r Login", False, session=sess),
         call("cd %here%", False, session=sess),
     ]
 
@@ -673,7 +695,7 @@ def test_grep_pattern_with_shell_metacharacters_quoted(mock_call):
 
     grep_cmd = mock_call.call_args_list[0].args[0]
     # shlex.quote will single-quote the dangerous payload.
-    assert grep_cmd == "grep '$(rm -rf /)'"
+    assert grep_cmd == "grep -r '$(rm -rf /)'"
 
 
 def test_grep_rejects_positional_path():
@@ -697,7 +719,7 @@ def test_grep_keyword_use_daemon_still_works():
     with patch.object(backend, "_call_execute", new_callable=AsyncMock) as mock_call:
         mock_call.return_value = {}
         backend.grep("Login", use_daemon=True)
-        assert mock_call.call_args_list == [call("grep Login", True, session=None)]
+        assert mock_call.call_args_list == [call("grep -r Login", True, session=None)]
 
 
 # ── type_text: focus+type pairing and newline injection guard ─────────

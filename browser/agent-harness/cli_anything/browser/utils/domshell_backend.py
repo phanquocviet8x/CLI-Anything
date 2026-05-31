@@ -806,8 +806,12 @@ def grep(
     translated_path, path_abs = _translate_path(path)
     if not translated_path:
         # Unrooted grep — operate on lane cwd, no cd, no restore.
+        # `-r` preserves the pre-migration semantic: the old
+        # `domshell_grep` tool defaulted to recursive=True (walk all
+        # descendants). Plain `grep <pat>` in DOMShell shell only
+        # searches the cwd's immediate children, missing nested matches.
         op = asyncio.run(_call_execute(
-            f"grep {_q(pattern)}", use_daemon, session=session,
+            f"grep -r {_q(pattern)}", use_daemon, session=session,
         ))
         return _parse_execute_result(op, "grep")
 
@@ -847,8 +851,10 @@ def grep(
     anchor = asyncio.run(_call_execute(anchor_cmd, use_daemon, session=session))
     if _is_error(anchor):
         return _parse_execute_result(anchor, "grep")
+    # `-r` preserves the pre-migration recursive default (see unrooted
+    # branch above for the full rationale).
     op = asyncio.run(_call_execute(
-        f"grep {_q(pattern)}", use_daemon, session=session,
+        f"grep -r {_q(pattern)}", use_daemon, session=session,
     ))
     asyncio.run(_call_execute(restore_cmd, use_daemon, session=session))
     return _parse_execute_result(op, "grep")

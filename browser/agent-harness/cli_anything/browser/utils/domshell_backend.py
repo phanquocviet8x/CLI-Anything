@@ -62,6 +62,25 @@ _daemon_read: Optional[Any] = None
 _daemon_write: Optional[Any] = None
 _daemon_client_context: Optional[Any] = None  # Store stdio_client context manager
 
+# Module-level lane id captured from the first daemon-mode-no-session
+# call. Reused on every subsequent daemon-no-session call so direct
+# wrappers like `open_url(use_daemon=True)` followed by
+# `ls(use_daemon=True)` preserve browser state across calls, regardless
+# of whether the daemon's persistent stdio connection is currently
+# alive or whether we've fallen back to spawning a fresh ClientSession
+# per call. The captured id is a numeric Chrome tab-group id, which
+# persists at the browser level even across MCP session boundaries —
+# so a fresh spawn can swapToAgentLane(id) into the lane the previous
+# spawn (or a still-living daemon) created.
+#
+# Stale-lane failure mode: if the user manually closes the Chrome tab
+# group this id points to, subsequent calls will surface DOMShell's
+# "Error: no lane 'A'" with its own recovery guidance. We don't
+# auto-recover here — same shape as `session.domshell_lane_id`
+# pointing to a closed group. Restart the daemon (or reset this attr)
+# to clear.
+_daemon_lane_id: Optional[str] = None
+
 
 def _check_npx() -> bool:
     """Check if npx is available."""
@@ -496,40 +515,31 @@ async def _call_execute(
     Raises:
         RuntimeError: If MCP server is not available or tool call fails
     """
-    global _daemon_session, _daemon_read, _daemon_write
+    global _daemon_session, _daemon_read, _daemon_write, _daemon_lane_id
 
     arguments: dict[str, Any] = {"command": command}
-    # Lane handling. DOMShell 2.0.2 deprecated omitting `group_id`
-    # (emits a [DEPRECATION] warning in the reply; hard error in 3.0.0),
-    # so we name the lane explicitly on every call. Three cases:
-    #   • subsequent calls (session has captured lane) → reuse that lane.
-    #   • non-daemon first call → group_id="new" — DOMShell creates a
-    #     fresh isolated lane and returns its id in the [lane: ...]
-    #     marker, which `_capture_lane` stores on the session for next
-    #     time.
-    #   • daemon-mode first call without a Session → group_id="shared".
-    #     When the persistent daemon connection is live, the default
-    #     per-connection lane stays sticky across calls — so direct
-    #     (sessionless) daemon workflows like `open_url(use_daemon=True)`
-    #     followed by `ls(use_daemon=True)` share browser state without
-    #     needing a Session to carry a lane id.
+    # Lane handling — three sources, in priority order:
+    #   • Session with a captured lane id  → reuse that lane (REPL pattern,
+    #     state preserved across non-daemon spawn-per-call sequences).
+    #   • Daemon mode + no session + previously captured _daemon_lane_id
+    #     → reuse the daemon-level captured id. Works whether the daemon's
+    #     stdio is alive (id reused on persistent connection) or dead
+    #     (fresh spawn joins the existing Chrome tab-group by id).
+    #   • Otherwise → group_id="new". DOMShell creates a fresh isolated
+    #     lane and returns the id in the [lane: ...] marker, captured into
+    #     either session.domshell_lane_id or _daemon_lane_id for next time.
     #
-    #     In the fall-back path (daemon dead / not started — i.e.
-    #     `_daemon_session is None` below), each call spawns its own
-    #     ClientSession, which triggers its own SESSION_START on
-    #     DOMShell and gets its own per-connection default lane.
-    #     "shared" is per-MCP-session, so it still routes correctly
-    #     there — to *that spawn's* default lane — giving per-call
-    #     isolation. Same outcome as omitting `group_id` would have
-    #     pre-2.0.2, minus the [DEPRECATION] warning, and crucially one
-    #     orphan tab-group per spawn instead of two (`group_id="new"`
-    #     would create an explicit second lane on top of the
-    #     SESSION_START default — the orphan flood reverted in commit
-    #     99d1182504).
+    # The "shared" branch from the previous version of this code (commit
+    # 99d1182) is gone. It claimed the per-connection default lane stayed
+    # sticky across calls — true when the persistent daemon connection is
+    # alive, but a lie in the fall-back spawn path where each call gets a
+    # different per-MCP-session default lane. @yuh-yang's review of
+    # b684732 flagged the inconsistency. The module-level capture path
+    # below is consistent across both daemon-alive and daemon-dead.
     if session is not None and getattr(session, "domshell_lane_id", None):
         arguments["group_id"] = session.domshell_lane_id
-    elif use_daemon:
-        arguments["group_id"] = "shared"
+    elif use_daemon and _daemon_lane_id:
+        arguments["group_id"] = _daemon_lane_id
     else:
         arguments["group_id"] = "new"
 
@@ -540,6 +550,13 @@ async def _call_execute(
                 "domshell_execute", arguments
             )
             _capture_lane(session, result)
+            # Daemon-level capture on first daemon-no-session call so
+            # subsequent calls reuse the same lane regardless of whether
+            # the daemon stays alive or we fall back to fresh spawns.
+            if use_daemon and session is None and _daemon_lane_id is None:
+                captured = _extract_lane_id(result)
+                if captured:
+                    _daemon_lane_id = captured
             return result
         except Exception as e:
             # Daemon died — log diagnosability and fall back to spawning
@@ -564,6 +581,12 @@ async def _call_execute(
                     "domshell_execute", arguments
                 )
                 _capture_lane(session, result)
+                # See daemon-path capture above for rationale — same
+                # logic applies on the fresh-spawn fall-back path.
+                if use_daemon and session is None and _daemon_lane_id is None:
+                    captured = _extract_lane_id(result)
+                    if captured:
+                        _daemon_lane_id = captured
                 return result
     except Exception as e:
         raise RuntimeError(
@@ -755,11 +778,14 @@ def cat(path: str, use_daemon: bool = False, *, session: Any = None) -> dict:
         {"output": "button: Submit\\n..."}
     """
     translated, is_absolute = _translate_path(path)
-    if not translated:
-        raise ValueError(
-            "cat: an element name is required — cannot cat the tab root. "
-            "Use `ls` to list the root's children, or pass a specific name."
-        )
+    # Note: a falsy `translated` (root path `/` or empty string) is no
+    # longer rejected here. Pre-migration `fs cat` at the root surfaced
+    # DOMShell's own `Usage: cat <name>` error string; the round-5 guard
+    # converted that into a Python ValueError, which broke the
+    # `fs.read_element(session, "")` fall-through to `session.working_dir`
+    # for callers landed at `/`. Removed per @yuh-yang R3 review of
+    # `b684732` — `cat ''` reaches DOMShell, which has the same
+    # `if (!targetName)` check and returns its standard Usage error.
     if is_absolute:
         _require_session_for_split_check("cat", session, use_daemon)
         # Split-and-check: anchor at tab root, halt if anchor fails,
@@ -827,6 +853,26 @@ def grep(
         {"matches": ["/main/button[0]"], "raw": "..."}
     """
     _assert_single_line("pattern", pattern)
+
+    # DOMShell's parseArgs treats any arg starting with "-" as a flag,
+    # with no "--" end-of-options separator and no "-e <pattern>" form
+    # (verified against src/background/index.ts:1692 in DOMShell 2.0.2).
+    # So `grep -r -- -foo` and `grep -r -e -foo` both fail at the
+    # kernel — neither survives parseArgs as a positional. Until
+    # DOMShell adds "--" support in a future release, raise a clear
+    # Python-side error so the user sees the limitation immediately
+    # instead of getting DOMShell's generic "Usage:" reply.
+    # (yuh-yang R3 blocker 3, Path B — Python-side soft validation.)
+    if pattern.startswith("-"):
+        raise ValueError(
+            f"grep: patterns starting with '-' are not supported by the "
+            f"current DOMShell parser — it would parse {pattern!r} as a "
+            f"flag rather than as the search pattern. Known limitation "
+            f"tracked upstream; will be resolved when DOMShell's "
+            f"parseArgs adds `--` end-of-options support. Workaround: "
+            f"drop the leading '-' from the pattern if possible, or "
+            f"wait for the upstream fix."
+        )
     translated_path, path_abs = _translate_path(path)
     if not translated_path:
         # Unrooted grep — operate on lane cwd, no cd, no restore.

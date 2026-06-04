@@ -146,11 +146,32 @@ def test_cat_relative_no_wrap(mock_call):
     assert mock_call.call_args.args[0] == "cat main/btn"
 
 
-def test_cat_root_raises_value_error():
-    with pytest.raises(ValueError, match="element name is required"):
-        backend.cat("/")
-    with pytest.raises(ValueError, match="element name is required"):
-        backend.cat("")
+@patch.object(backend, "_call_execute", new_callable=AsyncMock)
+def test_cat_root_path_does_not_raise_and_returns_parseable_result(mock_call):
+    """backend.cat("/") and backend.cat("") at the absolute root should
+    NOT raise a Python ValueError. Pre-migration behavior was to send
+    ``cat ''`` to DOMShell and surface its ``Usage: cat <name>`` error
+    string; the round-5 Python-side guard converted the kernel error
+    into a ValueError, which broke ``fs.read_element(session, "")``
+    callers landed at ``/``. @yuh-yang R3 blocker 1 required restoring
+    pre-migration behavior — guard removed, both inputs now reach
+    DOMShell, which has the same ``if (!targetName)`` check and
+    returns its standard Usage error.
+    """
+    mock_call.return_value = _make_result(
+        "\x1b[31mUsage: cat <name> (see cat --help)\x1b[0m\n[lane: shared]"
+    )
+    sess = _make_session(working_dir="/")  # satisfies absolute branch's session check
+
+    # MUST NOT raise — that was the regression.
+    result_root = backend.cat("/", session=sess)
+    result_empty = backend.cat("")
+
+    # Both surface DOMShell's error as a parsed dict, not a Python exception.
+    for r in (result_root, result_empty):
+        assert isinstance(r, dict)
+        # _parse_execute_result detects ANSI red → routes through error path.
+        assert "error" in r
 
 
 @patch.object(backend, "_call_execute", new_callable=AsyncMock)
@@ -903,6 +924,20 @@ def test_grep_rejects_newline_in_pattern():
         backend.grep("Login\nclick /admin", path="/main", prev="/")
 
 
+def test_grep_rejects_hyphen_prefixed_pattern():
+    """DOMShell's parseArgs treats any arg starting with "-" as a flag,
+    so the grep wrapper can't pass hyphen-prefixed search strings as
+    patterns. The wrapper raises ValueError with a clear message so
+    users see the limitation immediately rather than getting DOMShell's
+    generic Usage reply. Real fix needs upstream parseArgs ``--``
+    support; tracked upstream. (@yuh-yang R3 blocker 3, Path B.)
+    """
+    with pytest.raises(ValueError, match="patterns starting with '-'"):
+        backend.grep("-disabled")
+    with pytest.raises(ValueError, match="patterns starting with '-'"):
+        backend.grep("--content")
+
+
 def test_grep_rejects_newline_in_prev():
     with pytest.raises(ValueError, match="newline"):
         backend.grep("Login", path="/main", prev="/\nclick /admin")
@@ -1150,34 +1185,67 @@ def test_call_execute_passes_group_id_new_when_lane_is_none():
     assert sess.domshell_lane_id == "brand-new"
 
 
-def test_call_execute_passes_group_id_shared_for_daemon_mode_without_session():
-    """Daemon mode + no session: route to the default per-connection lane
-    via ``group_id="shared"``. The daemon's persistent stdio connection
-    keeps that lane sticky across calls, so direct callers like
-    ``open_url(use_daemon=True)`` followed by ``ls(use_daemon=True)``
-    share browser state without needing a Session object to carry a
-    lane id.
+def test_call_execute_daemon_no_session_first_call_passes_new_and_captures_lane():
+    """Daemon mode + no session, first call: passes ``group_id="new"``
+    and captures the lane id from the response into the module-level
+    ``_daemon_lane_id`` for subsequent calls. Replaces the previous
+    ``"shared"`` behavior (commit 99d1182) per @yuh-yang R3 blocker 2.
 
-    Migration note (PR #308 follow-up): the initial 2.0.2 migration
-    commit (be62f843b5) passed ``group_id="new"`` in this case, which
-    broke the daemon workflow by creating a fresh isolated lane per
-    call. Caught by Codex P2. Fix re-routes daemon-no-session calls to
-    ``"shared"``.
+    The R2 "shared" branch claimed per-connection-default stickiness
+    that holds when the persistent daemon connection is alive but
+    breaks in the fall-back spawn path (each call gets its own
+    per-MCP-session default lane). The captured-id approach works
+    consistently across both paths because Chrome tab-group ids
+    persist at the browser level, regardless of MCP session.
     """
-    fake_tool = AsyncMock(return_value=_make_result("✓\n[lane: daemon-default]"))
+    # Reset module state (other tests may have populated it).
+    backend._daemon_lane_id = None
 
-    fake_mcp_session = AsyncMock()
-    fake_mcp_session.call_tool = fake_tool
+    try:
+        fake_tool = AsyncMock(
+            return_value=_make_result("✓\n[lane: daemon-captured-99]")
+        )
+        fake_mcp_session = AsyncMock()
+        fake_mcp_session.call_tool = fake_tool
 
-    # Simulate a live daemon session — the same path open_url / ls take
-    # when called with use_daemon=True but no Session.
-    with patch.object(backend, "_daemon_session", fake_mcp_session):
-        import asyncio as _aio
-        _aio.run(backend._call_execute("ls /", use_daemon=True, session=None))
+        with patch.object(backend, "_daemon_session", fake_mcp_session):
+            import asyncio as _aio
+            _aio.run(backend._call_execute("ls /", use_daemon=True, session=None))
 
-    name, arguments = fake_tool.call_args.args
-    assert name == "domshell_execute"
-    assert arguments.get("group_id") == "shared"
+        name, arguments = fake_tool.call_args.args
+        assert name == "domshell_execute"
+        assert arguments.get("group_id") == "new"
+        assert backend._daemon_lane_id == "daemon-captured-99"
+    finally:
+        backend._daemon_lane_id = None
+
+
+def test_call_execute_daemon_no_session_subsequent_calls_reuse_captured_lane():
+    """Once ``_daemon_lane_id`` is set, daemon-no-session calls pass
+    that id as ``group_id`` instead of ``"new"`` — preserves browser
+    state across calls regardless of whether the daemon's stdio is
+    alive or whether we've fallen back to fresh spawns per call.
+    Capture stays stable; no clobber on subsequent calls.
+    """
+    backend._daemon_lane_id = "preexisting-77"
+
+    try:
+        fake_tool = AsyncMock(
+            return_value=_make_result("✓\n[lane: preexisting-77]")
+        )
+        fake_mcp_session = AsyncMock()
+        fake_mcp_session.call_tool = fake_tool
+
+        with patch.object(backend, "_daemon_session", fake_mcp_session):
+            import asyncio as _aio
+            _aio.run(backend._call_execute("ls /", use_daemon=True, session=None))
+
+        name, arguments = fake_tool.call_args.args
+        assert arguments.get("group_id") == "preexisting-77"
+        # Capture stays the same — no clobber on subsequent calls.
+        assert backend._daemon_lane_id == "preexisting-77"
+    finally:
+        backend._daemon_lane_id = None
 
 
 def test_distinct_sessions_have_isolated_lanes():

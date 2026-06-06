@@ -3,12 +3,10 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $skillDir = Split-Path -Parent $scriptDir
 
-$reasonixHome = if ($env:REASONIX_HOME) {
-    $env:REASONIX_HOME
-} elseif ($env:USERPROFILE) {
+$reasonixHome = if ($env:USERPROFILE) {
     Join-Path $env:USERPROFILE ".reasonix"
 } else {
-    throw "REASONIX_HOME is not set and USERPROFILE is unavailable."
+    throw "USERPROFILE is unavailable."
 }
 
 $destRoot = Join-Path $reasonixHome "skills"

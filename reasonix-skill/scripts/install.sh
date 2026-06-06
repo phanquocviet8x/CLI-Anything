@@ -4,7 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DEST_ROOT="${REASONIX_HOME:-$HOME/.reasonix}/skills"
+: "${HOME:?HOME must be set to install a global Reasonix skill}"
+DEST_ROOT="${HOME}/.reasonix/skills"
 DEST_DIR="${DEST_ROOT}/cli-anything"
 
 mkdir -p "${DEST_ROOT}"

@@ -1,20 +1,10 @@
 # CLI-Anything for Reasonix
 
-An adapter that brings the [CLI-Anything](https://github.com/HKUDS/CLI-Anything) harness methodology to the [Reasonix](https://reasonix.ai) coding agent.
+An adapter that brings the [CLI-Anything](https://github.com/HKUDS/CLI-Anything) harness methodology to the [Reasonix](https://github.com/esengine/DeepSeek-Reasonix) coding agent.
 
-CLI-Anything (42.1k+ stars) is a methodology for making **any GUI software agent-native** by generating stateful CLI harnesses with REPL mode, JSON output, undo/redo, and comprehensive tests. This adapter lets Reasonix act as the builder agent.
+CLI-Anything is a methodology for making **any GUI software agent-native** by generating stateful CLI harnesses with REPL mode, JSON output, undo/redo, and comprehensive tests. This adapter lets Reasonix act as the builder agent.
 
 ## Installation
-
-### Option 1: One-liner via Reasonix Skill API (Recommended)
-
-If you have a running Reasonix session, just ask:
-
-> "Install the cli-anything skill"
-
-Or programmatically, Reasonix's `install_skill` will place the skill at `~/.reasonix/skills/cli-anything.md`.
-
-### Option 2: Shell Install Script
 
 **macOS / Linux:**
 
@@ -32,7 +22,7 @@ cd CLI-Anything\reasonix-skill
 .\scripts\install.ps1
 ```
 
-Both scripts copy the skill to `$REASONIX_HOME/skills/cli-anything` (defaults to `~/.reasonix/skills/cli-anything`).
+Both scripts copy the skill to Reasonix's global skill directory at `~/.reasonix/skills/cli-anything`.
 
 ## Usage
 
@@ -70,7 +60,7 @@ The skill spawns an isolated Reasonix sub-agent that follows the CLI-Anything 7-
 /cli-anything https://github.com/blender/blender
 
 # Refine an existing harness
-/cli-anything:refine /home/user/gimp "batch processing and Script-Fu filters"
+/cli-anything /home/user/gimp "Refine the existing harness for batch processing and Script-Fu filters"
 ```
 
 ## Reasonix Tool Mapping
@@ -82,8 +72,7 @@ The skill spawns an isolated Reasonix sub-agent that follows the CLI-Anything 7-
 | Code editing | `edit_file` / `multi_edit` |
 | Source reading | `read_file` |
 | Codebase search | `grep` / `glob` / `ls` |
-| Architecture analysis | `mcp__codegraph__*` |
-| Parallel subtasks | `task` |
+| Architecture analysis | `mcp__codegraph__*` when CodeGraph is enabled |
 | Documentation fetch | `web_fetch` |
 
 ## File Structure
@@ -92,7 +81,6 @@ The skill spawns an isolated Reasonix sub-agent that follows the CLI-Anything 7-
 reasonix-skill/
 ├── SKILL.md                      # Main skill document (methodology + tool bindings)
 ├── README.md                     # This file
-├── REASONIX_SKILL_INSTALL.md     # install_skill API usage reference
 ├── agents/
 │   └── reasonix.yaml             # Agent interface metadata
 └── scripts/
@@ -107,9 +95,8 @@ reasonix-skill/
 | Skill format | `.claude-plugin/` | `SKILL.md` + YAML | `SKILL.md` + YAML | `SKILL.md` + YAML |
 | Shell | `bash` | `terminal` | `terminal` | `bash` |
 | File ops | native | `execute_code` | `execute_code` / `write_file` | `write_file` / `edit_file` / `multi_edit` |
-| Code analysis | file reads | file reads | file reads | `mcp__codegraph__*` (symbol graph) |
-| Parallelism | — | — | `delegate_task` | `task` (sub-agents) |
-| Install method | `/plugin install` | `install.sh` → `$CODEX_HOME/skills/` | `install.sh` → `$HERMES_HOME/skills/` | `install_skill` API or `install.sh` → `~/.reasonix/skills/` |
+| Code analysis | file reads | file reads | file reads | Optional `mcp__codegraph__*` symbol graph |
+| Install method | `/plugin install` | `install.sh` → `$CODEX_HOME/skills/` | `install.sh` → `$HERMES_HOME/skills/` | `install.sh` → `~/.reasonix/skills/` |
 
 ## Contributing
 

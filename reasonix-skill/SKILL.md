@@ -10,9 +10,10 @@ Use this skill when the user wants Reasonix to act like the `CLI-Anything` build
 
 Before implementation, use the full methodology source of truth when available:
 
-1. If this skill is being used from inside the `CLI-Anything` repository, read `../cli-anything-plugin/HARNESS.md` first.
-2. If that local file is unavailable, clone or download `cli-anything-plugin` from `https://github.com/HKUDS/CLI-Anything/tree/main/cli-anything-plugin`, then use `HARNESS.md` and the resources around it from that folder.
-3. Only if both local and network retrieval fail, follow the condensed rules below.
+1. If the current workspace is the `CLI-Anything` repository, read `cli-anything-plugin/HARNESS.md`.
+2. If Reasonix is running from this adapter directory, also check `../cli-anything-plugin/HARNESS.md`.
+3. If neither local file is available, clone or download `cli-anything-plugin` from `https://github.com/HKUDS/CLI-Anything/tree/main/cli-anything-plugin`, then use `HARNESS.md` and the resources around it from that folder.
+4. Only if local and network retrieval both fail, follow the condensed rules below.
 
 ## Inputs
 
@@ -37,13 +38,12 @@ Reasonix agents build harnesses by combining these built-in tools:
 | `grep` | Search for patterns across the target software codebase (APIs, CLI tools, data models) |
 | `glob` | Find files matching patterns in the source tree (*.py, *.xml, *.json, etc.) |
 | `ls` | List directory contents to understand project structure |
-| `mcp__codegraph__*` | Code graph analysis — symbol search, definition lookup, call tracing, and codebase exploration for deeper architectural understanding |
-| `task` | Parallelize analysis or generation subtasks by spawning isolated sub-agents |
+| `mcp__codegraph__*` | Optional code graph analysis when CodeGraph is enabled |
 | `web_fetch` | Fetch documentation, API references, or remote files from the web |
 
 ### Recommended Workflow with Reasonix Tools
 
-**Phase 1 (Analysis)** — Use `ls` + `glob` to survey the source tree, `grep` to find API surfaces and CLI entry points, `mcp__codegraph__codegraph_search` and `mcp__codegraph__codegraph_context` for deeper symbol/architecture analysis, and `read_file` to inspect key files.
+**Phase 1 (Analysis)** — Use `ls` + `glob` to survey the source tree, `grep` to find API surfaces and CLI entry points, and `read_file` to inspect key files. When CodeGraph is enabled and its tools are available, use `mcp__codegraph__codegraph_search` and `mcp__codegraph__codegraph_context` for deeper symbol and architecture analysis.
 
 **Phase 2-3 (Design & Implementation)** — Use `write_file` to create new harness files, `edit_file` / `multi_edit` to refine generated code, and `bash` to run `pip install -e .` for installation.
 
@@ -60,19 +60,25 @@ Use when the user wants a new harness.
 Produce this structure:
 
 ```text
-<software>/
-└── agent-harness/
-    ├── <SOFTWARE>.md
-    ├── setup.py
-    └── cli_anything/
-        └── <software>/
-            ├── README.md
-            ├── __init__.py
-            ├── __main__.py
-            ├── <software>_cli.py
-            ├── core/
-            ├── utils/
-            └── tests/
+<repo-root>/
+├── skills/
+│   └── cli-anything-<software>/
+│       └── SKILL.md
+└── <software>/
+    └── agent-harness/
+        ├── <SOFTWARE>.md
+        ├── setup.py
+        └── cli_anything/
+            └── <software>/
+                ├── README.md
+                ├── __init__.py
+                ├── __main__.py
+                ├── <software>_cli.py
+                ├── core/
+                ├── utils/
+                ├── tests/
+                └── skills/
+                    └── SKILL.md
 ```
 
 Implement a stateful Click CLI with:
@@ -111,6 +117,7 @@ Check that the harness:
 - has an installable `setup.py` entry point
 - supports JSON output
 - has a REPL default path
+- has matching canonical and package-local `SKILL.md` files
 - documents usage and tests
 
 ## Backend Rules
@@ -122,6 +129,7 @@ Prefer the real software backend over reimplementation. Wrap the actual executab
 - Use `find_namespace_packages(include=["cli_anything.*"])`
 - Keep `cli_anything/` as a namespace package without a top-level `__init__.py`
 - Expose `cli-anything-<software>` through `console_scripts`
+- Include `cli_anything.<software>/skills/SKILL.md` in package data
 
 ## Workflow
 
@@ -130,12 +138,12 @@ Prefer the real software backend over reimplementation. Wrap the actual executab
 3. Design command groups and state model.
 4. Implement the harness.
 5. Write `TEST.md`, then tests, then run them.
-6. Update README usage docs.
+6. Update README usage docs and generate both `skills/cli-anything-<software>/SKILL.md` and `cli_anything/<software>/skills/SKILL.md`.
 7. Verify local installation with `pip install -e .`
 
 ## Existing Harnesses (Reference)
 
-For an up-to-date list of supported harnesses and their backend patterns, see [`registry.json`](../registry.json) at the repository root.
+For an up-to-date list of supported harnesses and their backend patterns, locate `registry.json` at the `CLI-Anything` repository root when it is available.
 
 ## Output Expectations
 

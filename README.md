@@ -635,9 +635,7 @@ On Windows PowerShell, use:
 .\CLI-Anything\reasonix-skill\scripts\install.ps1
 ```
 
-This installs the skill to `$REASONIX_HOME/skills/cli-anything` (or `~/.reasonix/skills/cli-anything` if `REASONIX_HOME` is unset).
-
-Alternatively, Reasonix users can install directly via the `install_skill` API — see [`reasonix-skill/REASONIX_SKILL_INSTALL.md`](reasonix-skill/REASONIX_SKILL_INSTALL.md).
+This installs the skill to Reasonix's global skill directory at `~/.reasonix/skills/cli-anything`.
 
 Restart Reasonix after installation so it is discovered.
 
@@ -653,7 +651,7 @@ Use CLI-Anything to validate ./libreoffice
 
 The Reasonix skill adapts the same methodology used by the Claude Code plugin and
 Codex/Hermes skills, binding Reasonix's `bash`, `write_file`, `edit_file`,
-`multi_edit`, `grep`, `glob`, `mcp__codegraph__*`, and `task` tools to the
+`multi_edit`, `grep`, `glob`, and optional `mcp__codegraph__*` tools to the
 7-phase harness workflow while keeping the generated Python harness format unchanged.
 </details>
 

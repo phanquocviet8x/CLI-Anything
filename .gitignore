@@ -301,22 +301,9 @@ assets/gen_typing_gif.py
 !/registry.json
 !/public_registry.json
 !/matrix_registry.json
-!/docs/
-/docs/*
-!/docs/PREVIEW_PROTOCOL.md
-!/docs/PREVIEW_PROGRESS.md
-!/docs/FREECAD_VIDEO_REFERENCE.md
-!/docs/PREVIEW_MECHANISM_PROGRESS.md
-!/docs/scripts/
-!/docs/scripts/**
-/docs/scripts/__pycache__/
-/docs/scripts/**/*.pyc
-!/docs/hub/
-/docs/hub/registry-dates.json
-!/docs/cli-matrix/
-!/docs/cli-matrix/**
-/docs/cli-matrix/test-plans/video-challenge-runs/
-/docs/cli-matrix/test-plans/youtube-cookies.txt
+# docs/* is always ignored — working documents stay local and are never committed.
+# (Previously-tracked files under docs/ remain in the index until explicitly removed.)
+/docs/
 !/notebooklm/
 /notebooklm/*
 /notebooklm/.*

@@ -74,6 +74,16 @@ jobs:
           source: ./docs/hub
           destination: ./docs/_site
 
+      # Copied after the Jekyll build so SKILL.md front matter is served
+      # verbatim instead of being converted to HTML. Published at
+      # https://hkuds.github.io/CLI-Anything/matrix/<name>/{SKILL.md,references/,scripts/}
+      # (consumed by cli_hub.matrix_skill's published-URL fallback).
+      - name: Copy matrix skill content into site
+        run: |
+          sudo mkdir -p docs/_site/matrix
+          sudo rsync -a --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyo' \
+            cli-hub-matrix/ docs/_site/matrix/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

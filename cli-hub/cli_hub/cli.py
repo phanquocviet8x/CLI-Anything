@@ -11,7 +11,7 @@ import click
 from cli_hub import __version__
 from cli_hub.registry import fetch_all_clis, get_cli, search_clis, list_categories
 from cli_hub.matrix import fetch_all_matrices, get_matrix, preflight_matrix, search_matrices
-from cli_hub.matrix_skill import get_rendered_matrix_skill_path
+from cli_hub.matrix_skill import get_rendered_matrix_skill_path, render_matrix_skill_file
 from cli_hub.installer import install_cli, uninstall_cli, get_installed, update_cli, install_matrix
 from cli_hub.analytics import (
     detect_invocation_context,
@@ -605,8 +605,23 @@ def matrix_preflight(name, capability, offline, as_json):
 
 @matrix.command("install")
 @click.argument("name")
-def matrix_install(name):
+@click.option(
+    "--skill-only",
+    is_flag=True,
+    help="Render the matrix skill (SKILL.md + references/ + scripts/) without installing member CLIs.",
+)
+def matrix_install(name, skill_only):
     """Install every CLI in a matrix."""
+    if skill_only:
+        matrix_item = get_matrix(name)
+        if not matrix_item:
+            click.secho(f"Matrix '{name}' not found.", fg="red", err=True)
+            raise SystemExit(1)
+        rendered_skill_path = render_matrix_skill_file(matrix_item, installed=get_installed())
+        click.echo(f"  Local matrix skill: {rendered_skill_path}")
+        click.echo(f"  Install CLIs: cli-hub matrix install {matrix_item['name']}")
+        return
+
     click.echo(f"Installing matrix {name}...")
     success, payload = install_matrix(name)
     if payload.get("error"):

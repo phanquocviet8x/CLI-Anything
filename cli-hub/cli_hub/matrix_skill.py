@@ -1,12 +1,45 @@
-"""Render local matrix skill files with resolved CLI skill paths."""
+"""Render local matrix skill files with resolved CLI skill paths.
 
+Installed layout (one directory per matrix, so the skill's relative links to
+``references/*.md`` and ``scripts/*.py`` resolve):
+
+    ~/.cli-hub/matrix/<name>/SKILL.md
+    ~/.cli-hub/matrix/<name>/references/...
+    ~/.cli-hub/matrix/<name>/scripts/...
+
+Skill content source lookup chain:
+
+1. Repo checkout: ``<repo_root>/cli-hub-matrix/<name>/`` (via ``skill_md``).
+2. Bundled package data: ``cli_hub/_matrix_data/<name>/`` (shipped in
+   wheels/sdists built from a checkout; absent in editable installs, which
+   hit the checkout in step 1 instead).
+3. Published URL: ``https://hkuds.github.io/CLI-Anything/matrix/<name>/SKILL.md``
+   (SKILL.md only; references/scripts stay remote and are linked from the
+   rendered file).
+4. Generated stub.
+"""
+
+import shutil
 import subprocess
 from importlib import metadata
 from pathlib import Path
 
+import requests
+
 from cli_hub.registry import get_cli
 
 MATRIX_SKILL_DIR = Path.home() / ".cli-hub" / "matrix"
+
+# Base URL where deploy-pages.yml publishes cli-hub-matrix/ content (main only).
+MATRIX_CONTENT_BASE_URL = "https://hkuds.github.io/CLI-Anything/matrix"
+
+# Package data dir bundled into wheels/sdists by cli-hub/setup.py.
+BUNDLED_MATRIX_DATA_DIR = Path(__file__).resolve().parent / "_matrix_data"
+
+# Asset directories co-installed beside the rendered SKILL.md.
+MATRIX_ASSET_SUBDIRS = ("references", "scripts")
+
+_COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo")
 
 
 def _find_repo_root():
@@ -33,8 +66,17 @@ def _find_repo_root():
 
 
 def get_rendered_matrix_skill_path(name):
-    """Return the local rendered SKILL.md path for a matrix."""
-    return MATRIX_SKILL_DIR / f"{name}.SKILL.md"
+    """Return the local rendered SKILL.md path for a matrix.
+
+    Prefers the per-matrix directory layout (``<name>/SKILL.md``); falls back
+    to the legacy flat ``<name>.SKILL.md`` file when only that exists, so
+    pre-existing installs keep resolving until the next re-render.
+    """
+    current = MATRIX_SKILL_DIR / name / "SKILL.md"
+    legacy = MATRIX_SKILL_DIR / f"{name}.SKILL.md"
+    if not current.exists() and legacy.exists():
+        return legacy
+    return current
 
 
 def resolve_local_skill_path(cli):
@@ -72,36 +114,118 @@ def _fallback_repo_skill_path(cli):
 
 
 def render_matrix_skill_file(matrix_item, installed=None):
-    """Write a local matrix SKILL.md with resolved member skill paths."""
-    output_path = get_rendered_matrix_skill_path(matrix_item["name"])
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    """Write a local matrix SKILL.md with resolved member skill paths.
 
-    base_content = _load_matrix_skill_template(matrix_item).rstrip()
+    Renders into ``MATRIX_SKILL_DIR/<name>/SKILL.md`` and co-installs the
+    matrix content directory's ``references/`` and ``scripts/`` beside it so
+    the skill's relative links resolve. Re-rendering is idempotent: asset
+    directories are replaced wholesale on each render.
+    """
+    name = matrix_item["name"]
+    output_dir = MATRIX_SKILL_DIR / name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "SKILL.md"
+
+    template_path, content_dir = _resolve_matrix_content_source(matrix_item)
+    base_content = _load_matrix_skill_template(matrix_item, template_path).rstrip()
+    copied = _copy_matrix_assets(content_dir, output_dir) if content_dir else []
+
+    extra = ""
+    if not copied:
+        extra = (
+            "\n\n## Reference Modules\n\n"
+            "No local copy of this matrix's `references/` and `scripts/` was "
+            "found; relative links above will not resolve locally. The "
+            "published copies live under "
+            f"{MATRIX_CONTENT_BASE_URL}/{name}/ (e.g. "
+            f"{MATRIX_CONTENT_BASE_URL}/{name}/SKILL.md)."
+        )
+
     injected_section = _render_injected_section(matrix_item, installed or {})
     output_path.write_text(
-        f"{base_content}\n\n<!-- MATRIX_SKILL_PATHS:START -->\n\n{injected_section}\n\n<!-- MATRIX_SKILL_PATHS:END -->\n",
+        f"{base_content}\n\n<!-- MATRIX_SKILL_PATHS:START -->\n\n{injected_section}{extra}\n\n<!-- MATRIX_SKILL_PATHS:END -->\n",
         encoding="utf-8",
     )
     return output_path
 
 
-def _load_matrix_skill_template(matrix_item):
-    """Load the tracked matrix skill template when available."""
+def _resolve_matrix_content_source(matrix_item):
+    """Locate the matrix skill source as ``(template_path, content_dir)``.
+
+    Tries the repo checkout first, then bundled package data. Either element
+    may be ``None`` when nothing local is available (the template then falls
+    back to the published URL or a stub).
+    """
     skill_ref = matrix_item.get("skill_md")
     if skill_ref and "://" not in skill_ref and not skill_ref.startswith("npx "):
         repo_root = _find_repo_root()
         if repo_root is not None:
             candidate = repo_root / skill_ref
             if candidate.exists():
-                return candidate.read_text(encoding="utf-8")
+                return candidate, candidate.parent
+
+    bundled = BUNDLED_MATRIX_DATA_DIR / matrix_item["name"] / "SKILL.md"
+    if bundled.exists():
+        return bundled, bundled.parent
+
+    return None, None
+
+
+def _copy_matrix_assets(content_dir, output_dir):
+    """Copy references/ and scripts/ beside the rendered SKILL.md.
+
+    Existing asset directories are removed first so re-installs are clean and
+    stale files do not linger. ``__pycache__`` and ``*.pyc`` are excluded.
+    Returns the list of subdirectories that were copied.
+    """
+    copied = []
+    for subdir in MATRIX_ASSET_SUBDIRS:
+        source = content_dir / subdir
+        destination = output_dir / subdir
+        if destination.exists():
+            shutil.rmtree(destination)
+        if source.is_dir():
+            shutil.copytree(source, destination, ignore=_COPY_IGNORE)
+            copied.append(subdir)
+    return copied
+
+
+def _load_matrix_skill_template(matrix_item, template_path=None):
+    """Load the matrix skill template via the lookup chain.
+
+    Order: local source file (checkout or bundled data) -> published URL ->
+    generated stub.
+    """
+    if template_path is None:
+        template_path, _ = _resolve_matrix_content_source(matrix_item)
+    if template_path is not None:
+        return template_path.read_text(encoding="utf-8")
+
+    published = _fetch_published_matrix_skill(matrix_item["name"])
+    if published is not None:
+        return published
 
     title = matrix_item.get("display_name", matrix_item["name"])
     description = matrix_item.get("description", "")
     return (
         f"# {title}\n\n"
         f"{description}\n\n"
-        f"Install with `cli-hub matrix install {matrix_item['name']}`."
+        f"Install with `cli-hub matrix install {matrix_item['name']}`.\n\n"
+        f"Full skill content (when published): "
+        f"{MATRIX_CONTENT_BASE_URL}/{matrix_item['name']}/SKILL.md"
     )
+
+
+def _fetch_published_matrix_skill(name):
+    """Fetch the published SKILL.md for a matrix, or None on any failure."""
+    url = f"{MATRIX_CONTENT_BASE_URL}/{name}/SKILL.md"
+    try:
+        resp = requests.get(url, timeout=10)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200 or not resp.text.strip():
+        return None
+    return resp.text
 
 
 def _render_injected_section(matrix_item, installed):

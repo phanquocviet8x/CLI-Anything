@@ -101,6 +101,9 @@
 !/calibre/
 !/rekordbox/
 !/eez-studio/
+!/live2d/
+!/tigris/
+!/cc-switch/
 !/siyuan/
 # Step 5: Inside each software dir, ignore everything (including dotfiles)
 /gimp/*
@@ -211,6 +214,12 @@
 /rekordbox/.*
 /eez-studio/*
 /eez-studio/.*
+/live2d/*
+/live2d/.*
+/tigris/*
+/tigris/.*
+/cc-switch/*
+/cc-switch/.*
 /siyuan/*
 /siyuan/.*
 
@@ -277,8 +286,11 @@
 !/sbox/agent-harness/
 !/quietshrink/agent-harness/
 !/mailchimp/agent-harness/
+!/live2d/agent-harness/
 !/rekordbox/agent-harness/
 !/eez-studio/agent-harness/
+!/tigris/agent-harness/
+!/cc-switch/agent-harness/
 !/siyuan/agent-harness/
 
 # Exclude non-gedit demo macros from macrocli (local only)

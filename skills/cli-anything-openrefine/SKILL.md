@@ -48,26 +48,8 @@ cli-anything-openrefine --json --session run/session.json session redo
 
 ## REPL
 
-Run `cli-anything-openrefine` with no subcommand to enter the REPL. Useful commands include:
-
-- `projects`
-- `import <path> [name]`
-- `open <project_id>`
-- `rows [limit]`
-- `export <path> [format]`
-- `undo`
-- `redo`
-- `exit`
+Run `cli-anything-openrefine` with no subcommand to enter the REPL.
 
 ## Error Handling
 
-When `--json` is set, command failures write a JSON object to stderr:
-
-```json
-{
-  "error": "No project selected. Pass --project-id or import/open a project first.",
-  "ok": false
-}
-```
-
-If OpenRefine is unavailable, start it locally or point `OPENREFINE_URL` at the correct backend.
+When `--json` is set, command failures write a JSON object to stderr with `ok: false`.

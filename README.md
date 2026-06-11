@@ -1068,6 +1068,13 @@ Each application received complete, production-ready CLI interfaces — not demo
 <td align="center">✅ 158</td>
 </tr>
 <tr>
+<td align="center"><strong><a href="openrefine/agent-harness/">OpenRefine</a></strong></td>
+<td>Data Cleaning</td>
+<td><code>cli-anything-openrefine</code></td>
+<td>OpenRefine local HTTP API</td>
+<td align="center">✅ 76</td>
+</tr>
+<tr>
 <td align="center"><strong>⚡ <a href="n8n/agent-harness/">n8n</a></strong></td>
 <td>Workflow Automation</td>
 <td><code>cli-anything-n8n</code></td>
@@ -1436,6 +1443,7 @@ cli-anything/
 ├── 🌐 browser/agent-harness/            # Browser CLI (DOMShell MCP, new)
 ├── 🌐 web-yu-pri/agent-harness/         # Japan Post Web Yu-pri CLI (new)
 ├── 📄 libreoffice/agent-harness/        # LibreOffice CLI (158 tests)
+├── 🧹 openrefine/agent-harness/         # OpenRefine CLI (76 tests: 64 unit + 12 real backend e2e)
 ├── 📧 mailchimp/agent-harness/          # Mailchimp Marketing API CLI (303 commands, 36 unit tests)
 ├── 📚 zotero/agent-harness/             # Zotero CLI (new, write import support)
 ├── 📖 calibre/agent-harness/            # Calibre CLI (58 tests: 38 unit + 20 E2E)

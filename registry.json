@@ -6,6 +6,25 @@
   },
   "clis": [
     {
+      "name": "openrefine",
+      "display_name": "OpenRefine",
+      "version": "1.0.0",
+      "description": "Agent-native CLI for OpenRefine import, operation-history cleaning, row inspection, export, and session undo/redo through the real local HTTP API.",
+      "requires": "OpenRefine 3.10.x or newer running as a local web server",
+      "homepage": "https://openrefine.org/",
+      "source_url": null,
+      "install_cmd": "pip install git+https://github.com/HKUDS/CLI-Anything.git#subdirectory=openrefine/agent-harness",
+      "entry_point": "cli-anything-openrefine",
+      "skill_md": "skills/cli-anything-openrefine/SKILL.md",
+      "category": "database",
+      "contributors": [
+        {
+          "name": "CA-AutoAgent",
+          "url": "https://github.com/HKUDS/CLI-Anything"
+        }
+      ]
+    },
+    {
       "name": "cc-switch",
       "display_name": "CC Switch",
       "version": "1.0.0",

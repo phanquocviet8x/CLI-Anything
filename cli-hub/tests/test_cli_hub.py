@@ -13,6 +13,7 @@ import requests
 from cli_hub import __version__
 from cli_hub.registry import fetch_registry, fetch_all_clis, get_cli, search_clis, list_categories
 from cli_hub.matrix import (
+    _package_available,
     check_provider_requirements,
     fetch_matrix_registry,
     fetch_all_matrices,
@@ -590,6 +591,40 @@ class TestMatrixRegistry:
         assert payload["capabilities"][0]["agent_installable_count"] == 1
         assert "recommended" not in payload["capabilities"][0]
         assert payload["capabilities"][0]["providers"][0]["status"] == "agent-installable"
+
+
+class TestPackageAvailable:
+    """Tests for _package_available() — import name, dist name, and error handling."""
+
+    def test_stdlib_import_name_detected(self):
+        assert _package_available("json") is True
+
+    @patch("cli_hub.matrix.importlib.util.find_spec", return_value=None)
+    @patch("cli_hub.matrix.importlib.metadata.version", return_value="7.2.3")
+    def test_dist_name_with_dash_detected_via_metadata(self, mock_version, mock_find_spec):
+        assert _package_available("edge-tts") is True
+        mock_version.assert_called_with("edge-tts")
+
+    @patch("cli_hub.matrix.importlib.util.find_spec")
+    @patch("cli_hub.matrix.importlib.metadata.version", side_effect=Exception("not found"))
+    def test_dash_normalized_to_underscore_detected_via_find_spec(self, mock_version, mock_find_spec):
+        mock_find_spec.side_effect = lambda n: MagicMock() if n == "edge_tts" else None
+        assert _package_available("edge-tts") is True
+
+    @patch("cli_hub.matrix.importlib.util.find_spec", return_value=None)
+    @patch("cli_hub.matrix.importlib.metadata.version", side_effect=Exception("not found"))
+    def test_uninstalled_garbage_name_returns_false(self, mock_version, mock_find_spec):
+        assert _package_available("xyzzy-totally-fake-pkg-99999") is False
+
+    @patch("cli_hub.matrix.importlib.util.find_spec", side_effect=RuntimeError("boom"))
+    @patch("cli_hub.matrix.importlib.metadata.version", side_effect=RuntimeError("boom"))
+    def test_exceptions_are_swallowed_returns_false(self, mock_version, mock_find_spec):
+        assert _package_available("some-pkg") is False
+
+    @patch("cli_hub.matrix.importlib.util.find_spec", return_value=MagicMock())
+    def test_plain_import_name_detected_via_find_spec(self, mock_find_spec):
+        assert _package_available("PIL") is True
+        mock_find_spec.assert_called_with("PIL")
 
 
 class TestMatrixSkill:

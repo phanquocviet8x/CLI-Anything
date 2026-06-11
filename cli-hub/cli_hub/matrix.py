@@ -1,5 +1,6 @@
 """Fetch, cache, and query curated CLI workflow matrices."""
 
+import importlib.metadata
 import importlib.util
 import json
 import os
@@ -128,11 +129,24 @@ def _as_list(value):
     return [value]
 
 
-def _package_available(package_name):
+def _package_available(name):
     try:
-        return importlib.util.find_spec(package_name) is not None
-    except (ImportError, ModuleNotFoundError, ValueError):
-        return False
+        if importlib.util.find_spec(name) is not None:
+            return True
+    except Exception:
+        pass
+    try:
+        normalized = name.replace("-", "_")
+        if normalized != name and importlib.util.find_spec(normalized) is not None:
+            return True
+    except Exception:
+        pass
+    try:
+        importlib.metadata.version(name)
+        return True
+    except Exception:
+        pass
+    return False
 
 
 def check_provider_requirements(provider):

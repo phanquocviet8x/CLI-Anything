@@ -35,6 +35,25 @@ def get_session() -> Session:
     return _session
 
 
+def _same_project_path(session: Session, project_path: str) -> bool:
+    return session.project_path == os.path.abspath(project_path)
+
+
+def _configure_session(session_id: str | None, project_path: str | None) -> None:
+    global _session
+    if _repl_mode:
+        session = get_session()
+        if session_id and session.session_id != session_id:
+            session.session_id = session_id
+        if project_path and not _same_project_path(session, project_path):
+            session.open_project(project_path)
+        return
+
+    _session = Session(session_id)
+    if project_path:
+        _session.open_project(project_path)
+
+
 def output(data: Any, message: str = "") -> None:
     if _json_output:
         click.echo(json.dumps(data, indent=2, default=str))
@@ -110,11 +129,9 @@ def cli(ctx: click.Context, json_mode: bool, project_path: str | None, session_i
 
     Run without a subcommand to enter the interactive REPL.
     """
-    global _json_output, _session
+    global _json_output
     _json_output = json_mode
-    _session = Session(session_id)
-    if project_path:
-        _session.open_project(project_path)
+    _configure_session(session_id, project_path)
     ctx.ensure_object(dict)
     ctx.obj["project_path"] = project_path
     ctx.obj["json"] = json_mode
@@ -188,8 +205,6 @@ def repl(ctx: click.Context, project_path: str | None) -> None:
             if ctx.obj and ctx.obj.get("json"):
                 args = ["--json"] + args
             cli.main(args=args, standalone_mode=False)
-            if session.project_path:
-                session.open_project(session.project_path)
         except SystemExit:
             pass
         except Exception as exc:

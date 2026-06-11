@@ -58,4 +58,4 @@ If a future EEZ Studio release exposes a documented headless code-generation com
 
 ## Testing
 
-Unit tests cover native project JSON operations and subprocess JSON output without the backend. Full E2E tests include a backend-required test that fails loudly when `EEZ_STUDIO_SOURCE` is not set or EEZ Studio has not been built.
+Unit tests cover native project JSON operations and subprocess JSON output without the backend. The default E2E suite verifies backend status and the unavailable-backend error path; live EEZ Studio backend inspection is opt-in with `EEZ_STUDIO_RUN_LIVE_BACKEND=1` and a built `EEZ_STUDIO_SOURCE`.

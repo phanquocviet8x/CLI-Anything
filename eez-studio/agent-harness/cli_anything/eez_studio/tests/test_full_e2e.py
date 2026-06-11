@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from cli_anything.eez_studio.core import project as project_mod
 
 
@@ -57,6 +59,24 @@ class TestCLISubprocessE2E:
         data = json.loads(result.stdout)
         assert "available" in data
 
+    def test_backend_inspect_reports_unavailable_without_source(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("EEZ_STUDIO_SOURCE", raising=False)
+        project_path = tmp_path / "backend-unavailable.eez-project"
+        self._run(["--json", "project", "new", "-o", str(project_path), "--name", "NoBackend"])
+        result = self._run(
+            ["--json", "--project", str(project_path), "lvgl", "backend-inspect"],
+            check=False,
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stderr)
+        assert data["type"] == "RuntimeError"
+        assert "EEZ Studio backend is not available" in data["error"]
+        assert "EEZ_STUDIO_SOURCE" in data["error"]
+
+    @pytest.mark.skipif(
+        os.environ.get("EEZ_STUDIO_RUN_LIVE_BACKEND") != "1",
+        reason="set EEZ_STUDIO_RUN_LIVE_BACKEND=1 with a built EEZ_STUDIO_SOURCE to run live backend tests",
+    )
     def test_real_backend_inspect_required(self, tmp_path):
         project_path = tmp_path / "backend.eez-project"
         self._run(["--json", "project", "new", "-o", str(project_path), "--name", "Backend"])

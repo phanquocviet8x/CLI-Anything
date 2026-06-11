@@ -74,4 +74,4 @@ python3 -m pytest cli_anything/eez_studio/tests/test_core.py -v
 python3 -m pytest cli_anything/eez_studio/tests/test_full_e2e.py -v
 ```
 
-The full E2E suite intentionally requires a real EEZ Studio backend for backend tests. If `EEZ_STUDIO_SOURCE` is unavailable, those tests fail with setup instructions.
+The default E2E suite does not require a real EEZ Studio backend; it verifies backend status and the structured unavailable-backend error path. To run the live backend inspection test, set `EEZ_STUDIO_RUN_LIVE_BACKEND=1` and `EEZ_STUDIO_SOURCE` to a built EEZ Studio checkout.

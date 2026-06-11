@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -220,7 +221,7 @@ def run_custom_build_command(project_path: str, timeout: int = 300) -> dict[str,
             "No native EEZ build command configured. Set EEZ_STUDIO_BUILD_COMMAND "
             "or use `lvgl simulator-build` with EEZ_STUDIO_SOURCE.\n" + INSTALL_MESSAGE
         )
-    args = command.split() + [os.path.abspath(project_path)]
+    args = shlex.split(command) + [os.path.abspath(project_path)]
     result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(

@@ -3,9 +3,11 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from cli_anything.eez_studio import eez_studio_cli
 from cli_anything.eez_studio.core import project as project_mod
 from cli_anything.eez_studio.core import scpi as scpi_mod
 from cli_anything.eez_studio.core.session import Session
+from cli_anything.eez_studio.utils import eez_studio_backend
 from cli_anything.eez_studio.eez_studio_cli import cli
 
 
@@ -88,3 +90,63 @@ def test_cli_json_mutation_autosaves(tmp_path):
     assert result.exit_code == 0, result.output
     loaded = project_mod.load_project(path)
     assert any(widget["text"] == "Ready" for widget in project_mod.list_widgets(loaded))
+
+
+def test_repl_dispatch_preserves_open_session_mutation_and_undo(tmp_path):
+    path = tmp_path / "repl.eez-project"
+    runner = CliRunner()
+    session = Session("repl-test")
+    eez_studio_cli._session = session
+    eez_studio_cli._repl_mode = True
+    eez_studio_cli._json_output = False
+    try:
+        result = runner.invoke(cli, ["--json", "project", "new", "-o", str(path), "--name", "REPL"])
+        assert result.exit_code == 0, result.output
+        assert eez_studio_cli.get_session() is session
+        assert session.project_path == str(path.resolve())
+
+        result = runner.invoke(cli, ["--json", "--project", str(path), "lvgl", "add-label", "--text", "Unsaved"])
+        assert result.exit_code == 0, result.output
+        assert session.is_modified is True
+        assert any(widget["text"] == "Unsaved" for widget in project_mod.list_widgets(session.project or {}))
+        assert not any(widget.get("text") == "Unsaved" for widget in project_mod.list_widgets(project_mod.load_project(path)))
+
+        result = runner.invoke(cli, ["--json", "--project", str(path), "session", "undo"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["undone"] is True
+        assert not any(widget.get("text") == "Unsaved" for widget in project_mod.list_widgets(session.project or {}))
+    finally:
+        eez_studio_cli._session = None
+        eez_studio_cli._repl_mode = False
+        eez_studio_cli._json_output = False
+
+
+def test_custom_build_command_uses_shlex_for_quoted_args(tmp_path, monkeypatch):
+    project_path = tmp_path / "quoted project.eez-project"
+    project_path.write_text("{}", encoding="utf-8")
+    tool_path = tmp_path / "tool with spaces"
+    captured = {}
+
+    class Result:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    def fake_run(args, capture_output, text, timeout):
+        captured["args"] = args
+        captured["capture_output"] = capture_output
+        captured["text"] = text
+        captured["timeout"] = timeout
+        return Result()
+
+    monkeypatch.setenv("EEZ_STUDIO_BUILD_COMMAND", f'"{tool_path}" --flag "two words"')
+    monkeypatch.setattr(eez_studio_backend.subprocess, "run", fake_run)
+
+    result = eez_studio_backend.run_custom_build_command(str(project_path), timeout=12)
+
+    assert captured["args"] == [str(tool_path), "--flag", "two words", str(project_path.resolve())]
+    assert captured["capture_output"] is True
+    assert captured["text"] is True
+    assert captured["timeout"] == 12
+    assert result["command"] == captured["args"]

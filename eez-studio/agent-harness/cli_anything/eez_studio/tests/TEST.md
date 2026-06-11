@@ -42,7 +42,8 @@
 
 ### Real Backend Inspect
 
-- Call `lvgl backend-inspect` through the CLI. This must invoke EEZ Studio's built `docker-build-lib.js` via Node. If `EEZ_STUDIO_SOURCE` is not configured or EEZ Studio is not built, the test must fail loudly with setup instructions.
+- Default run: call `lvgl backend-inspect` without `EEZ_STUDIO_SOURCE` and verify the CLI returns a structured unavailable-backend error with setup instructions.
+- Opt-in live run: when `EEZ_STUDIO_RUN_LIVE_BACKEND=1` and `EEZ_STUDIO_SOURCE` points to a built checkout, call `lvgl backend-inspect` through the CLI and verify structured project info from EEZ Studio's built `docker-build-lib.js`.
 
 ### Simulator Output Verification
 
@@ -65,8 +66,8 @@
 **Backend LVGL project inspection**
 
 - Simulates: build automation reading EEZ project settings before a manufacturing/test export.
-- Operations chained: prepare destination directory, invoke real EEZ Studio Node backend.
-- Verified: backend exit code and structured project info from `docker-build-lib.js`.
+- Operations chained: prepare destination directory, verify default unavailable-backend behavior, optionally invoke real EEZ Studio Node backend.
+- Verified: structured unavailable-backend error by default; backend exit code and structured project info from `docker-build-lib.js` when opted in.
 
 ## Test Results
 
@@ -77,7 +78,7 @@ python3 -m json.tool ../../registry.json
 python3 -m compileall cli_anything/eez_studio
 python3 -m pip install -e .
 python3 -m pytest cli_anything/eez_studio/tests/test_core.py -v
-python3 -m pytest cli_anything/eez_studio/tests/test_full_e2e.py -v -s
+env -u EEZ_STUDIO_SOURCE -u EEZ_STUDIO_RUN_LIVE_BACKEND python3 -m pytest cli_anything/eez_studio/tests/test_full_e2e.py -v
 ```
 
 Unit test result:
@@ -91,8 +92,10 @@ cli_anything/eez_studio/tests/test_core.py::test_scpi_subsystem_command_paramete
 cli_anything/eez_studio/tests/test_core.py::test_session_undo_redo PASSED
 cli_anything/eez_studio/tests/test_core.py::test_cli_json_project_new PASSED
 cli_anything/eez_studio/tests/test_core.py::test_cli_json_mutation_autosaves PASSED
+cli_anything/eez_studio/tests/test_core.py::test_repl_dispatch_preserves_open_session_mutation_and_undo PASSED
+cli_anything/eez_studio/tests/test_core.py::test_custom_build_command_uses_shlex_for_quoted_args PASSED
 
-8 passed in 0.10s
+10 passed in 0.11s
 ```
 
 Full E2E result:
@@ -101,17 +104,15 @@ Full E2E result:
 cli_anything/eez_studio/tests/test_full_e2e.py::TestCLISubprocessE2E::test_help PASSED
 cli_anything/eez_studio/tests/test_full_e2e.py::TestCLISubprocessE2E::test_native_project_scpi_workflow PASSED
 cli_anything/eez_studio/tests/test_full_e2e.py::TestCLISubprocessE2E::test_backend_status_json PASSED
-cli_anything/eez_studio/tests/test_full_e2e.py::TestCLISubprocessE2E::test_real_backend_inspect_required FAILED
+cli_anything/eez_studio/tests/test_full_e2e.py::TestCLISubprocessE2E::test_backend_inspect_reports_unavailable_without_source PASSED
+cli_anything/eez_studio/tests/test_full_e2e.py::TestCLISubprocessE2E::test_real_backend_inspect_required SKIPPED
 
-1 failed, 3 passed in 2.86s
+4 passed, 1 skipped in 1.12s
 ```
 
-Backend failure evidence:
+Unavailable backend evidence:
 
 ```text
-EEZ Studio backend is required for this E2E test.
-Set EEZ_STUDIO_SOURCE to a built https://github.com/eez-open/studio checkout.
-
 stderr:
 {
   "error": "EEZ Studio backend is not available.\n\nInstall/build the real target software and point this harness at it:\n  git clone https://github.com/eez-open/studio.git\n  cd studio\n  npm install\n  npm run build\n  export EEZ_STUDIO_SOURCE=/absolute/path/to/studio\n\nFor full LVGL simulator builds, Docker must also be installed and running.\n",
@@ -121,12 +122,12 @@ stderr:
 
 ## Summary Statistics
 
-- Unit tests: 8 passed, 0 failed.
-- Full E2E tests: 3 passed, 1 failed because the real EEZ Studio backend is unavailable in this environment.
+- Unit tests: 10 passed, 0 failed.
+- Full E2E tests: 4 passed, 1 skipped by default because live backend inspection is opt-in.
 - Registry JSON validation: passed.
 - Python compile validation: passed.
 - Editable install: passed.
 
 ## Coverage Notes
 
-The native `.eez-project` editing path, session undo/redo, SCPI model edits, CLI subprocess execution, and JSON output are covered. The real EEZ Studio backend path is implemented and intentionally remains a failing E2E gate until a built EEZ Studio checkout is provided through `EEZ_STUDIO_SOURCE`.
+The native `.eez-project` editing path, REPL session reuse, session undo/redo, SCPI model edits, CLI subprocess execution, JSON output, unavailable-backend handling, and quoted custom build command parsing are covered. The real EEZ Studio backend path is implemented as an opt-in E2E gate for environments with `EEZ_STUDIO_RUN_LIVE_BACKEND=1` and a built `EEZ_STUDIO_SOURCE`.

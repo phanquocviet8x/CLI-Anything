@@ -10,7 +10,7 @@
   ],
   "provisioning": {
     "download_url": "https://github.com/OpenRefine/OpenRefine/releases/download/3.10.1/openrefine-linux-3.10.1.tar.gz",
-    "extract_note": "Extract the OpenRefine release tarball and run its refine executable with -i 127.0.0.1 -p 3333.",
+    "extract_note": "Extract the OpenRefine release tarball and run the openrefine command, or the bundled refine executable, with -i 127.0.0.1 -p 3333.",
     "data_dir": "/tmp/openrefine-data"
   },
   "readiness": {

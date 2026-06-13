@@ -259,9 +259,12 @@ def ops() -> None:
 @click.option("--expression", required=True)
 @click.pass_context
 def ops_text_transform(ctx: click.Context, output: str, column: str, expression: str) -> None:
-    op = text_transform(column, expression)
-    path = save_operations([op], output)
-    _emit({"output": str(path), "operations": [op]}, ctx.obj["json"])
+    def _build() -> dict[str, Any]:
+        op = text_transform(column, expression)
+        path = save_operations([op], output)
+        return {"output": str(path), "operations": [op]}
+
+    _handle(ctx, _build)
 
 
 @ops.command("mass-edit")
@@ -270,15 +273,18 @@ def ops_text_transform(ctx: click.Context, output: str, column: str, expression:
 @click.option("--edit", multiple=True, help="Mapping in old=new form. Repeatable.")
 @click.pass_context
 def ops_mass_edit(ctx: click.Context, output: str, column: str, edit: tuple[str, ...]) -> None:
-    edits = {}
-    for item in edit:
-        if "=" not in item:
-            raise click.BadParameter("--edit must be in old=new form")
-        src, dst = item.split("=", 1)
-        edits[src] = dst
-    op = mass_edit(column, edits)
-    path = save_operations([op], output)
-    _emit({"output": str(path), "operations": [op]}, ctx.obj["json"])
+    def _build() -> dict[str, Any]:
+        edits = {}
+        for item in edit:
+            if "=" not in item:
+                raise ValueError("--edit must be in old=new form")
+            src, dst = item.split("=", 1)
+            edits[src] = dst
+        op = mass_edit(column, edits)
+        path = save_operations([op], output)
+        return {"output": str(path), "operations": [op]}
+
+    _handle(ctx, _build)
 
 
 @ops.command("add-column")
@@ -288,9 +294,12 @@ def ops_mass_edit(ctx: click.Context, output: str, column: str, edit: tuple[str,
 @click.option("--expression", required=True)
 @click.pass_context
 def ops_add_column(ctx: click.Context, output: str, name: str, source_column: str, expression: str) -> None:
-    op = column_addition(name, source_column, expression)
-    path = save_operations([op], output)
-    _emit({"output": str(path), "operations": [op]}, ctx.obj["json"])
+    def _build() -> dict[str, Any]:
+        op = column_addition(name, source_column, expression)
+        path = save_operations([op], output)
+        return {"output": str(path), "operations": [op]}
+
+    _handle(ctx, _build)
 
 
 @ops.command("remove-column")
@@ -298,9 +307,12 @@ def ops_add_column(ctx: click.Context, output: str, name: str, source_column: st
 @click.option("--column", required=True)
 @click.pass_context
 def ops_remove_column(ctx: click.Context, output: str, column: str) -> None:
-    op = column_removal(column)
-    path = save_operations([op], output)
-    _emit({"output": str(path), "operations": [op]}, ctx.obj["json"])
+    def _build() -> dict[str, Any]:
+        op = column_removal(column)
+        path = save_operations([op], output)
+        return {"output": str(path), "operations": [op]}
+
+    _handle(ctx, _build)
 
 
 @cli.group()

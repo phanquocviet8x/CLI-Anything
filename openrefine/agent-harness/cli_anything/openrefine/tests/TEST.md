@@ -2,7 +2,7 @@
 
 ## Test Inventory Plan
 
-- `test_core.py`: 64 backend-free unit and CLI tests planned.
+- `test_core.py`: 76 backend-free unit and CLI tests planned.
 - `test_full_e2e.py`: 12 real-backend E2E tests planned.
 
 ## Unit Test Plan
@@ -36,11 +36,12 @@ Unit suite run:
 
 ```text
 $ python -m pytest cli_anything/openrefine/tests/test_core.py -q
-................................................................         [100%]
-64 passed in 0.28s
+........................................................................ [ 94%]
+....                                                                     [100%]
+76 passed in 0.42s
 ```
 
-Full suite run with OpenRefine 3.10.1 running at `http://127.0.0.1:3333`:
+Previous full suite run with OpenRefine 3.10.1 running at `http://127.0.0.1:3333`:
 
 ```text
 $ python -m pytest cli_anything/openrefine/tests -q
@@ -64,6 +65,25 @@ $ python <strict-validator-snippet>
 passed= True
 unit pytest returncode= 0 stdout_tail= ['64 passed in 0.28s']
 full E2E pytest returncode= 0 stdout_tail= ['12 passed in 6.23s']
+```
+
+Current revision backend availability check:
+
+```text
+$ which openrefine || true
+openrefine not found
+$ which refine || true
+refine not found
+$ python - <<'PY'
+import requests
+try:
+    r = requests.get('http://127.0.0.1:3333/command/core/get-version', timeout=2)
+    print(r.status_code)
+    print(r.text[:200])
+except Exception as exc:
+    print(type(exc).__name__ + ': ' + str(exc))
+PY
+ConnectionError: HTTPConnectionPool(host='127.0.0.1', port=3333): Max retries exceeded with url: /command/core/get-version (Caused by NewConnectionError("HTTPConnection(host='127.0.0.1', port=3333): Failed to establish a new connection: [Errno 1] Operation not permitted"))
 ```
 
 Earlier sandbox-only E2E attempt before starting OpenRefine:
@@ -103,7 +123,7 @@ Collection check:
 
 ```text
 $ python -m pytest cli_anything/openrefine/tests/ --collect-only -q
-76 tests collected in 0.14s
+88 tests collected in 0.17s
 ```
 
 Setup metadata check:
@@ -117,9 +137,9 @@ $ python setup.py --version
 
 ## Summary Statistics
 
-- Total collected tests: 76
-- Backend-free unit tests: 64 passing
-- E2E tests: 12 collected and passing against a real OpenRefine 3.10.1 local HTTP backend
+- Total collected tests: 88
+- Backend-free unit tests: 76 passing
+- E2E tests: 12 collected and previously passing against a real OpenRefine 3.10.1 local HTTP backend
 - Minimum validator thresholds met: 50+ pytest tests and 10+ E2E pytest tests
 
 ## Coverage Notes

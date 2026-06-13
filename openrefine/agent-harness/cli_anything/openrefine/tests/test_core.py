@@ -336,10 +336,10 @@ def test_backend_undo_uses_openrefine_undo_id():
     assert result["data"] == {"project": "123", "undoID": "11"}
 
 
-def test_backend_redo_uses_openrefine_undo_id():
+def test_backend_redo_uses_openrefine_last_done_id():
     backend = RecordingOpenRefineBackend({"past": [], "future": [{"id": 12}, {"id": 13}]})
     result = backend.redo("123")
-    assert result["data"] == {"project": "123", "undoID": "12"}
+    assert result["data"] == {"project": "123", "lastDoneID": "12"}
 
 
 def test_backend_undo_without_history_raises():
@@ -424,6 +424,13 @@ def test_cli_ops_mass_edit_bad_mapping(tmp_path):
     output = tmp_path / "ops.json"
     result = CliRunner().invoke(cli, ["ops", "mass-edit", str(output), "--column", "City", "--edit", "bad"])
     assert result.exit_code != 0
+
+
+def test_cli_ops_mass_edit_bad_mapping_json_error(tmp_path):
+    output = tmp_path / "ops.json"
+    result = CliRunner().invoke(cli, ["--json", "ops", "mass-edit", str(output), "--column", "City", "--edit", "bad"])
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == {"error": "--edit must be in old=new form", "ok": False}
 
 
 def test_cli_ops_add_column_json(tmp_path):

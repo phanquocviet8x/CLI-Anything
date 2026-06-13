@@ -21,6 +21,8 @@ It wraps these OpenRefine surfaces:
 - `/command/core/get-rows`
 - `/command/core/apply-operations`
 - `/command/core/export-rows`
+- `/command/core/get-history`
+- `/command/core/get-csrf-token`
 - `/command/core/undo-redo`
 - `/command/core/delete-project`
 

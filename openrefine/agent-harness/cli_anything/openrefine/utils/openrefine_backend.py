@@ -117,7 +117,7 @@ class OpenRefineBackend:
         entry_id = _latest_history_entry_id(self.get_history(project_id), "future")
         if not entry_id:
             raise OpenRefineError(f"No OpenRefine history entry to redo for project {project_id}")
-        return self._json("POST", "/command/core/undo-redo", data={"project": project_id, "undoID": entry_id}, csrf=True)
+        return self._json("POST", "/command/core/undo-redo", data={"project": project_id, "lastDoneID": entry_id}, csrf=True)
 
     def delete_project(self, project_id: str) -> dict[str, Any]:
         return self._json("POST", "/command/core/delete-project", data={"project": project_id}, csrf=True)
